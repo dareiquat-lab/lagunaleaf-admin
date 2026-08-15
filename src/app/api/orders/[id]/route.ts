@@ -74,6 +74,35 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(order);
 }
 
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const body = await req.json();
+  const sql = getDb();
+
+  const fields: string[] = [];
+  const allowed = ["status", "payment_status", "payment_method"];
+  for (const key of allowed) {
+    if (body[key] !== undefined) fields.push(key);
+  }
+  if (fields.length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  const [order] = await sql`
+    UPDATE orders SET
+      status         = COALESCE(${body.status         ?? null}, status),
+      payment_status = COALESCE(${body.payment_status ?? null}, payment_status),
+      payment_method = COALESCE(${body.payment_method ?? null}, payment_method),
+      updated_at     = NOW()
+    WHERE id = ${parseInt(id)}
+    RETURNING *
+  `;
+
+  if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(order);
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

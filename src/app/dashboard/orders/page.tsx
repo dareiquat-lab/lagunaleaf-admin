@@ -2,17 +2,73 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Search, Trash2, ShoppingBag, ExternalLink, CalendarIcon, X } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ExternalLink, CalendarIcon, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge } from "@/components/status-badge";
 import { PageTransition } from "@/components/page-transition";
 import { Order } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+// Inline status select that looks like a badge
+function InlineSelect({
+  value,
+  options,
+  colorMap,
+  onChange,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  colorMap: Record<string, string>;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative inline-block">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "appearance-none pl-2 pr-5 py-0.5 rounded-full text-xs font-medium cursor-pointer border-0 outline-none",
+          colorMap[value] ?? "bg-gray-100 text-gray-600"
+        )}
+        style={{ WebkitAppearance: "none" }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 h-2.5 w-2.5 pointer-events-none opacity-60" />
+    </div>
+  );
+}
+
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  pending:   "bg-[#D4A853]/15 text-[#D4A853]",
+  completed: "bg-[#5A8A6E]/15 text-[#5A8A6E]",
+  cancelled: "bg-[#D97B6C]/15 text-[#D97B6C]",
+};
+
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  unpaid:  "bg-[#D97B6C]/15 text-[#D97B6C]",
+  partial: "bg-[#D4A853]/15 text-[#D4A853]",
+  paid:    "bg-[#5A8A6E]/15 text-[#5A8A6E]",
+};
+
+const ORDER_STATUS_OPTIONS = [
+  { value: "pending",   label: "Pending" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: "unpaid",  label: "Unpaid" },
+  { value: "partial", label: "Partial" },
+  { value: "paid",    label: "Paid" },
+];
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -48,6 +104,22 @@ export default function OrdersPage() {
   }
 
   const hasFilters = search || statusFilter !== "all" || paymentFilter !== "all" || dateFrom || dateTo;
+
+  async function patchOrder(id: number, patch: Record<string, string>) {
+    // Optimistic update
+    setOrders((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, ...patch } : o))
+    );
+    const res = await fetch(`/api/orders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      toast.error("Failed to update");
+      fetchOrders(); // revert
+    }
+  }
 
   async function handleDelete(id: number) {
     await fetch(`/api/orders/${id}`, { method: "DELETE" });
@@ -111,21 +183,11 @@ export default function OrdersPage() {
           <div className="flex items-center gap-2">
             <CalendarIcon className="h-4 w-4 text-[#8A9A8E]" />
             <span className="text-sm text-[#8A9A8E]">From</span>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="w-40 h-9 text-sm"
-            />
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40 h-9 text-sm" />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-[#8A9A8E]">To</span>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="w-40 h-9 text-sm"
-            />
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40 h-9 text-sm" />
           </div>
           {hasFilters && (
             <button
@@ -148,8 +210,6 @@ export default function OrdersPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-[#8A9A8E]">Client</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-[#8A9A8E]">Date & Time</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-[#8A9A8E]">Items</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-[#8A9A8E]">Subtotal</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-[#8A9A8E]">Discount</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-[#8A9A8E]">Total</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-[#8A9A8E]">Payment</th>
                 <th className="text-center px-4 py-3 text-xs font-medium text-[#8A9A8E]">Pay Status</th>
@@ -161,14 +221,14 @@ export default function OrdersPage() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-6 w-full" /></td>
                     ))}
                   </tr>
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center">
+                  <td colSpan={8} className="py-16 text-center">
                     <ShoppingBag className="h-10 w-10 text-[#E8EDE9] mx-auto mb-3" />
                     <p className="text-sm text-[#8A9A8E]">No orders found.</p>
                     <Link href="/dashboard/orders/new" className="text-sm text-[#5A8A6E] hover:underline mt-1 inline-block">
@@ -180,10 +240,7 @@ export default function OrdersPage() {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-[#FAFAF8] transition-colors">
                     <td className="px-6 py-3">
-                      <Link
-                        href={`/dashboard/orders/${order.id}`}
-                        className="group flex flex-col gap-0.5"
-                      >
+                      <Link href={`/dashboard/orders/${order.id}`} className="group flex flex-col gap-0.5">
                         <span className="font-medium text-[#2D3B35] group-hover:text-[#5A8A6E] transition-colors flex items-center gap-1">
                           {order.client_name || "Walk-in"}
                           <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -193,17 +250,23 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-4 py-3 text-[#8A9A8E] whitespace-nowrap">{formatDateTime(order.ordered_at)}</td>
                     <td className="px-4 py-3 text-center text-[#2D3B35]">{order.items_count ?? 0}</td>
-                    <td className="px-4 py-3 text-right text-[#2D3B35]">{formatCurrency(Number(order.subtotal))}</td>
-                    <td className="px-4 py-3 text-right text-[#D97B6C]">
-                      {Number(order.discount) > 0 ? `-${formatCurrency(Number(order.discount))}` : "—"}
-                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-[#2D3B35]">{formatCurrency(Number(order.total))}</td>
                     <td className="px-4 py-3 text-[#8A9A8E] capitalize">{order.payment_method || "—"}</td>
                     <td className="px-4 py-3 text-center">
-                      <StatusBadge type="payment_status" value={order.payment_status} />
+                      <InlineSelect
+                        value={order.payment_status}
+                        options={PAYMENT_STATUS_OPTIONS}
+                        colorMap={PAYMENT_STATUS_COLORS}
+                        onChange={(v) => patchOrder(order.id, { payment_status: v })}
+                      />
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <StatusBadge type="order_status" value={order.status} />
+                      <InlineSelect
+                        value={order.status}
+                        options={ORDER_STATUS_OPTIONS}
+                        colorMap={ORDER_STATUS_COLORS}
+                        onChange={(v) => patchOrder(order.id, { status: v })}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">

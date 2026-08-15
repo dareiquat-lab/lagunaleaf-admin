@@ -1,18 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Search, UserPlus } from "lucide-react";
+import { ArrowLeft, Loader2, Search, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderItemsEditor } from "@/components/order-items-editor";
-import { ClientForm } from "@/components/client-form";
 import { PageTransition } from "@/components/page-transition";
 import { Separator } from "@/components/ui/separator";
 import { Client, OrderItem } from "@/lib/types";
@@ -23,19 +21,21 @@ import { toast } from "sonner";
 export default function NewOrderPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [clientSearch, setClientSearch] = useState("");
-  const [showClientSearch, setShowClientSearch] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [newClientDialog, setNewClientDialog] = useState(false);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [taxMode, setTaxMode] = useState<"amount" | "percent">("amount");
 
-  const now = new Date();
-  const defaultDate = format(now, "yyyy-MM-dd'T'HH:mm");
+  // Client fields — typed directly, with search suggestions for returning clients
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("")
+  const [phone, setPhone] = useState("");
+  const [linkedClientId, setLinkedClientId] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<Client[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
+  const now = new Date();
   const [form, setForm] = useState({
-    ordered_at: defaultDate,
+    ordered_at: format(now, "yyyy-MM-dd'T'HH:mm"),
     status: "pending",
     payment_method: "cash",
     payment_status: "unpaid",
@@ -44,15 +44,34 @@ export default function NewOrderPage() {
     notes: "",
   });
 
+  // Search for existing clients as user types name
   useEffect(() => {
-    if (clientSearch.length > 0) {
-      fetch(`/api/clients?search=${encodeURIComponent(clientSearch)}`)
-        .then((r) => r.json())
-        .then(setClients);
-    } else {
-      setClients([]);
-    }
-  }, [clientSearch]);
+    const query = `${firstName} ${lastName}`.trim();
+    if (query.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/clients?search=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setSuggestions(data.slice(0, 5));
+      if (data.length > 0) setShowSuggestions(true);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [firstName, lastName]);
+
+  function selectExistingClient(c: Client) {
+    setFirstName(c.first_name);
+    setLastName(c.last_name);
+    setPhone(c.phone || "");
+    setLinkedClientId(c.id);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  // If user edits name after linking, unlink the client
+  function handleNameChange(field: "first" | "last", value: string) {
+    setLinkedClientId(null);
+    if (field === "first") setFirstName(value);
+    else setLastName(value);
+  }
 
   const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0);
   const discount = parseFloat(form.discount) || 0;
@@ -65,12 +84,31 @@ export default function NewOrderPage() {
     e.preventDefault();
     setLoading(true);
     try {
+      let clientId = linkedClientId;
+
+      // If name is typed but no existing client linked, create one
+      if (!clientId && firstName.trim()) {
+        const clientRes = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            first_name: firstName.trim(),
+            last_name: lastName.trim() || "—",
+            phone: phone.trim() || null,
+          }),
+        });
+        if (clientRes.ok) {
+          const newClient = await clientRes.json();
+          clientId = newClient.id;
+        }
+      }
+
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          client_id: selectedClient?.id || null,
+          client_id: clientId,
           subtotal,
           discount,
           tax: taxValue,
@@ -78,11 +116,13 @@ export default function NewOrderPage() {
           items,
         }),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err?.error || `Save failed (${res.status})`);
         return;
       }
+
       const order = await res.json();
       toast.success("Order saved");
       router.push(`/dashboard/orders/${order.id}`);
@@ -112,78 +152,76 @@ export default function NewOrderPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
+
             {/* Client */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Client</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedClient ? (
-                  <div className="flex items-center justify-between p-3 bg-[#F0F4F1] rounded-xl">
-                    <div>
-                      <p className="font-medium text-[#2D3B35]">
-                        {selectedClient.first_name} {selectedClient.last_name}
-                      </p>
-                      <p className="text-sm text-[#8A9A8E]">
-                        {[selectedClient.email, selectedClient.phone].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedClient(null)}
-                    >
-                      Change
-                    </Button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 relative">
+                    <Label>First Name</Label>
+                    <Input
+                      placeholder="Jane"
+                      value={firstName}
+                      onChange={(e) => handleNameChange("first", e.target.value)}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                      autoComplete="off"
+                    />
+                    {/* Suggestions dropdown */}
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div
+                        ref={suggestionsRef}
+                        className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-[#E8EDE9] rounded-xl shadow-lg overflow-hidden"
+                      >
+                        <p className="text-[10px] text-[#8A9A8E] px-3 pt-2 pb-1 flex items-center gap-1">
+                          <Search className="h-3 w-3" /> Existing clients
+                        </p>
+                        {suggestions.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={() => selectExistingClient(c)}
+                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#F0F4F1] text-left"
+                          >
+                            <div className="w-7 h-7 rounded-full bg-[#5A8A6E]/10 flex items-center justify-center text-xs font-medium text-[#5A8A6E] shrink-0">
+                              {c.first_name[0]}{c.last_name[0]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-[#2D3B35]">{c.first_name} {c.last_name}</p>
+                              <p className="text-xs text-[#8A9A8E]">{c.phone || c.email || ""}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8A9A8E]" />
-                      <Input
-                        className="pl-9"
-                        placeholder="Search client by name or email..."
-                        value={clientSearch}
-                        onChange={(e) => { setClientSearch(e.target.value); setShowClientSearch(true); }}
-                        onFocus={() => setShowClientSearch(true)}
-                        onBlur={() => setTimeout(() => setShowClientSearch(false), 200)}
-                      />
-                      {showClientSearch && clients.length > 0 && (
-                        <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-[#E8EDE9] rounded-xl shadow-md overflow-hidden">
-                          {clients.map((client) => (
-                            <button
-                              key={client.id}
-                              type="button"
-                              onMouseDown={() => {
-                                setSelectedClient(client);
-                                setClientSearch("");
-                                setShowClientSearch(false);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#F0F4F1] text-left"
-                            >
-                              <div className="w-8 h-8 rounded-full bg-[#5A8A6E]/10 flex items-center justify-center text-sm font-medium text-[#5A8A6E]">
-                                {client.first_name[0]}{client.last_name[0]}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">{client.first_name} {client.last_name}</p>
-                                <p className="text-xs text-[#8A9A8E]">{client.email || client.phone || "No contact info"}</p>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setNewClientDialog(true)}
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      Create new client
-                    </Button>
+                  <div className="space-y-1.5">
+                    <Label>Last Name</Label>
+                    <Input
+                      placeholder="Smith"
+                      value={lastName}
+                      onChange={(e) => handleNameChange("last", e.target.value)}
+                      autoComplete="off"
+                    />
                   </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Phone Number</Label>
+                  <Input
+                    placeholder="(555) 000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    type="tel"
+                  />
+                </div>
+                {linkedClientId && (
+                  <p className="text-xs text-[#5A8A6E] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#5A8A6E] inline-block" />
+                    Linked to existing client
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -292,7 +330,6 @@ export default function NewOrderPage() {
 
                 <Separator />
 
-                {/* Totals */}
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-[#8A9A8E]">
                     <span>Subtotal</span>
@@ -338,22 +375,6 @@ export default function NewOrderPage() {
           </div>
         </div>
       </form>
-
-      {/* New Client Dialog */}
-      <Dialog open={newClientDialog} onOpenChange={setNewClientDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Create New Client</DialogTitle>
-          </DialogHeader>
-          <ClientForm
-            onSuccess={(client) => {
-              setSelectedClient(client);
-              setNewClientDialog(false);
-            }}
-            onCancel={() => setNewClientDialog(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </PageTransition>
   );
 }
