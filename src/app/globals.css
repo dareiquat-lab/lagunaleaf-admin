@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Force dark mode to use .dark class only — not OS preference (Tailwind v4 default) */
+@variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #FAFAF8;
   --foreground: #2D3B35;
