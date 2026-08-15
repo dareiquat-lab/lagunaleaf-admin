@@ -63,10 +63,6 @@ export default function NewOrderPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (items.length === 0) {
-      toast.error("Add at least one product to the order");
-      return;
-    }
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
@@ -82,12 +78,17 @@ export default function NewOrderPage() {
           items,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create order");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.error || `Save failed (${res.status})`);
+        return;
+      }
       const order = await res.json();
-      toast.success("Order created successfully");
+      toast.success("Order saved");
       router.push(`/dashboard/orders/${order.id}`);
-    } catch {
-      toast.error("Failed to create order");
+    } catch (err) {
+      toast.error("Network error — check your connection");
+      console.error(err);
     } finally {
       setLoading(false);
     }
