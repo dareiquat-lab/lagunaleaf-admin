@@ -12,6 +12,7 @@ import {
   Users,
   BarChart3,
   Tag,
+  UserCheck,
   LogOut,
   Menu,
   X,
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/orders", label: "Orders", icon: ShoppingBag },
   { href: "/dashboard/clients", label: "Clients", icon: Users },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/dashboard/employees", label: "Employees", icon: UserCheck },
   { href: "/dashboard/categories", label: "Categories", icon: Tag },
 ];
 

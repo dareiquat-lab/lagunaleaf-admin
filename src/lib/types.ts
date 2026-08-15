@@ -101,7 +101,34 @@ export interface TopProduct {
 export interface AnalyticsSummary {
   total_revenue: number;
   total_profit: number;
+  total_labor_costs: number;
+  net_profit: number;
   average_order_value: number;
   total_orders: number;
   orders_by_status: { status: string; count: number }[];
+}
+
+export interface Employee {
+  id: number;
+  name: string;
+  role: string | null;
+  pay_type: "hourly" | "salary" | "contractor";
+  pay_rate: number;
+  hours_per_week: number | null;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  total_paid?: number;
+  cost_count?: number;
+}
+
+export interface EmployeeCost {
+  id: number;
+  employee_id: number;
+  employee_name?: string;
+  amount: number;
+  paid_on: string;
+  notes: string | null;
+  created_at: string;
 }

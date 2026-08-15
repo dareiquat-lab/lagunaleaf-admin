@@ -15,16 +15,25 @@ export async function GET(req: NextRequest) {
   const [summary] = await sql`
     SELECT
       COALESCE(SUM(o.total), 0) as total_revenue,
-      COALESCE(SUM(o.total - o.discount - COALESCE((
-        SELECT SUM(oi.quantity * oi.unit_cost)
-        FROM order_items oi WHERE oi.order_id = o.id
-      ), 0)), 0) as total_profit,
+      COALESCE(SUM(
+        o.total - o.discount - COALESCE((
+          SELECT SUM(oi.quantity * oi.unit_cost)
+          FROM order_items oi WHERE oi.order_id = o.id
+        ), 0)
+      ), 0) as total_profit,
       COUNT(o.id) as total_orders,
       CASE WHEN COUNT(o.id) > 0 THEN COALESCE(SUM(o.total), 0) / COUNT(o.id) ELSE 0 END as average_order_value
     FROM orders o
     WHERE o.ordered_at >= ${from}::date
       AND o.ordered_at < (${to}::date + INTERVAL '1 day')
       AND o.status != 'cancelled'
+  `;
+
+  const [laborRow] = await sql`
+    SELECT COALESCE(SUM(amount), 0) as total_labor_costs
+    FROM employee_costs
+    WHERE paid_on >= ${from}::date
+      AND paid_on <= ${to}::date
   `;
 
   const ordersByStatus = await sql`
@@ -35,8 +44,13 @@ export async function GET(req: NextRequest) {
     GROUP BY status
   `;
 
+  const totalLabor = Number(laborRow.total_labor_costs);
+  const grossProfit = Number(summary.total_profit);
+
   return NextResponse.json({
     ...summary,
+    total_labor_costs: totalLabor,
+    net_profit: grossProfit - totalLabor,
     orders_by_status: ordersByStatus,
   });
 }

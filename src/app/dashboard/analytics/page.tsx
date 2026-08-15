@@ -14,7 +14,7 @@ import { PageTransition, StaggerContainer, StaggerItem } from "@/components/page
 import { DashboardCard } from "@/components/dashboard-card";
 import { AnalyticsSummary, RevenueDataPoint, TopProduct } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
-import { DollarSign, TrendingUp, ShoppingBag, BarChart3 } from "lucide-react";
+import { DollarSign, TrendingUp, ShoppingBag, BarChart3, Users } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 
 type DateRange = "week" | "month" | "last_month" | "custom";
@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
         </StaggerItem>
         <StaggerItem>
           <DashboardCard
-            title="Total Profit"
+            title="Gross Profit"
             value={loading ? "—" : formatCurrency(Number(summary?.total_profit ?? 0))}
             icon={TrendingUp}
             variant="success"
@@ -130,19 +130,52 @@ export default function AnalyticsPage() {
         </StaggerItem>
         <StaggerItem>
           <DashboardCard
-            title="Total Orders"
-            value={loading ? "—" : Number(summary?.total_orders ?? 0)}
-            icon={ShoppingBag}
+            title="Labor Costs"
+            value={loading ? "—" : formatCurrency(Number(summary?.total_labor_costs ?? 0))}
+            icon={Users}
+            variant="warning"
           />
         </StaggerItem>
         <StaggerItem>
           <DashboardCard
-            title="Avg Order Value"
-            value={loading ? "—" : formatCurrency(Number(summary?.average_order_value ?? 0))}
+            title="Net Profit"
+            value={loading ? "—" : formatCurrency(Number(summary?.net_profit ?? 0))}
             icon={BarChart3}
+            variant={Number(summary?.net_profit ?? 0) >= 0 ? "success" : "destructive"}
           />
         </StaggerItem>
       </StaggerContainer>
+
+      {/* Profit breakdown */}
+      {!loading && summary && (
+        <div className="bg-white rounded-xl border border-[#E8EDE9] p-5">
+          <p className="text-sm font-medium text-[#2D3B35] mb-4">Profit Breakdown</p>
+          <div className="space-y-2 text-sm max-w-sm">
+            <div className="flex justify-between">
+              <span className="text-[#8A9A8E]">Revenue</span>
+              <span className="font-medium text-[#2D3B35]">{formatCurrency(Number(summary.total_revenue))}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#8A9A8E]">− Cost of goods</span>
+              <span className="font-medium text-[#D97B6C]">−{formatCurrency(Number(summary.total_revenue) - Number(summary.total_profit))}</span>
+            </div>
+            <div className="flex justify-between border-t border-[#E8EDE9] pt-2">
+              <span className="text-[#8A9A8E]">Gross Profit</span>
+              <span className="font-medium text-[#5A8A6E]">{formatCurrency(Number(summary.total_profit))}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#8A9A8E]">− Labor costs</span>
+              <span className="font-medium text-[#D97B6C]">−{formatCurrency(Number(summary.total_labor_costs))}</span>
+            </div>
+            <div className="flex justify-between border-t border-[#E8EDE9] pt-2">
+              <span className="font-semibold text-[#2D3B35]">Net Profit</span>
+              <span className={`font-bold text-base ${Number(summary.net_profit) >= 0 ? "text-[#5A8A6E]" : "text-[#D97B6C]"}`}>
+                {formatCurrency(Number(summary.net_profit))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Revenue & Profit Line Chart */}
       <Card>

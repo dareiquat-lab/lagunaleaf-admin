@@ -86,6 +86,32 @@ async function migrate() {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS employees (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      role VARCHAR(100),
+      pay_type VARCHAR(20) NOT NULL DEFAULT 'hourly',
+      pay_rate DECIMAL(10,2) NOT NULL DEFAULT 0,
+      hours_per_week DECIMAL(5,1) DEFAULT 40,
+      is_active BOOLEAN DEFAULT true,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS employee_costs (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+      amount DECIMAL(10,2) NOT NULL,
+      paid_on DATE NOT NULL DEFAULT CURRENT_DATE,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
   console.log("Tables created successfully.");
 
   // Seed categories
