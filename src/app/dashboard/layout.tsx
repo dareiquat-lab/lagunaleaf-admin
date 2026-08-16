@@ -11,7 +11,7 @@ export default async function DashboardLayout({
   if (!session) redirect("/");
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] dark:bg-[#111816]">
+    <div className="min-h-screen bg-[#E3E7E4] dark:bg-[#111816]">
       <Sidebar userEmail={session.user?.email} />
       <main className="lg:ml-60 pt-0 lg:pt-0">
         <div className="h-14 lg:hidden" />

@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} h-full`} suppressHydrationWarning>
-      <body className="min-h-full bg-[#FAFAF8] text-[#2D3B35] dark:bg-[#111816] dark:text-[#E8F0EC]">
+      <body className="min-h-full bg-[#E3E7E4] text-[#1C2A21] dark:bg-[#111816] dark:text-[#E8F0EC]">
         <ThemeProvider>
           {children}
           <Toaster
