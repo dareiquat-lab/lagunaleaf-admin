@@ -13,7 +13,7 @@ interface ImageUploadProps {
 
 export function ImageUpload({ value, onChange }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useRef(`img-upload-${Math.random().toString(36).slice(2)}`);
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -44,7 +44,7 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="relative w-full h-48 rounded-xl border border-[#E8EDE9] overflow-hidden bg-[#FAFAF8]">
+        <div className="relative w-full h-48 rounded-xl border border-[#C4CFC6] overflow-hidden bg-[#F4F6F5]">
           <Image src={value} alt="Product" fill className="object-contain p-2" />
           <Button
             type="button"
@@ -57,9 +57,10 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
           </Button>
         </div>
       ) : (
-        <div
-          onClick={() => inputRef.current?.click()}
-          className="w-full h-48 rounded-xl border-2 border-dashed border-[#E8EDE9] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#5A8A6E] hover:bg-[#5A8A6E]/5 transition-all duration-200"
+        /* Wrap in <label> so iOS/Android natively open the file picker on tap */
+        <label
+          htmlFor={inputId.current}
+          className="block w-full h-48 rounded-xl border-2 border-dashed border-[#C4CFC6] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-[#5A8A6E] hover:bg-[#5A8A6E]/5 transition-all duration-200"
         >
           {uploading ? (
             <div className="flex flex-col items-center gap-2">
@@ -75,22 +76,25 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
                 <p className="text-sm font-medium text-[#2D3B35]">Upload image</p>
                 <p className="text-xs text-[#8A9A8E]">PNG, JPG up to 10MB</p>
               </div>
-              <Button type="button" variant="outline" size="sm">
+              <span className="inline-flex items-center gap-1.5 text-xs border border-[#C4CFC6] bg-white text-[#1C2A21] rounded-lg px-3 py-1.5 shadow-sm">
                 <Upload className="h-3.5 w-3.5" />
                 Choose file
-              </Button>
+              </span>
             </>
           )}
-        </div>
+        </label>
       )}
+
+      {/* accept="image/*" shows both camera and photo library on mobile */}
       <input
-        ref={inputRef}
+        id={inputId.current}
         type="file"
         accept="image/*"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFile(file);
+          e.target.value = "";
         }}
       />
     </div>
