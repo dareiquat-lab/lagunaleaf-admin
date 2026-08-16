@@ -78,7 +78,14 @@ export default function NewOrderPage() {
   const taxValue = taxMode === "percent"
     ? (subtotal - discount) * (parseFloat(form.tax) || 0) / 100
     : parseFloat(form.tax) || 0;
-  const total = Math.max(0, subtotal - discount + taxValue);
+  const computedTotal = Math.max(0, subtotal - discount + taxValue);
+
+  // Allow admin to override the final total directly
+  const [totalOverride, setTotalOverride] = useState<string | null>(null);
+  const total = totalOverride !== null ? (parseFloat(totalOverride) || 0) : computedTotal;
+
+  // When computed total changes (items/discount/tax), clear override
+  useEffect(() => { setTotalOverride(null); }, [computedTotal]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -348,9 +355,30 @@ export default function NewOrderPage() {
                     </div>
                   )}
                   <Separator />
-                  <div className="flex justify-between font-semibold text-[#2D3B35] text-base">
-                    <span>Total</span>
-                    <span>{formatCurrency(total)}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="font-semibold text-[#2D3B35]">Total</span>
+                      {totalOverride !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setTotalOverride(null)}
+                          className="ml-2 text-[10px] text-[#8A9A8E] hover:text-[#D97B6C] underline"
+                        >
+                          reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative w-32">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9A8E] text-sm pointer-events-none">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={totalOverride !== null ? totalOverride : computedTotal.toFixed(2)}
+                        onChange={(e) => setTotalOverride(e.target.value)}
+                        className="pl-6 h-8 text-right font-semibold text-[#2D3B35]"
+                      />
+                    </div>
                   </div>
                 </div>
 
