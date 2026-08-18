@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
         ${search ? sql`(p.name ILIKE ${"%" + search + "%"} OR p.sku ILIKE ${"%" + search + "%"})` : sql`TRUE`}
       )
       AND (${categoryId ? sql`p.category_id = ${parseInt(categoryId)}` : sql`TRUE`})
-      AND (${stockStatus === "low" ? sql`p.stock_quantity <= p.low_stock_threshold` : stockStatus === "out" ? sql`p.stock_quantity = 0` : sql`TRUE`})
+      AND (${stockStatus === "low" || stockStatus === "out" ? sql`p.stock_quantity = 0` : sql`TRUE`})
       ORDER BY p.created_at DESC
     `;
   } else {

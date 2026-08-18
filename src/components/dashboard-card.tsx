@@ -36,7 +36,7 @@ export function DashboardCard({
   };
 
   return (
-    <Card className={cn("overflow-hidden", className)}>
+    <Card className={cn("overflow-hidden transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 cursor-pointer", className)}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div className="space-y-2">

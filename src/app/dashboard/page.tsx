@@ -88,55 +88,67 @@ export default function DashboardPage() {
       {/* Stats Grid */}
       <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StaggerItem>
-          <DashboardCard
-            title="Total Products"
-            value={loading ? "—" : stats?.total_products ?? 0}
-            icon={Package}
-            subtitle="Active inventory items"
-          />
+          <Link href="/dashboard/inventory" className="block">
+            <DashboardCard
+              title="Total Products"
+              value={loading ? "—" : stats?.total_products ?? 0}
+              icon={Package}
+              subtitle="Active inventory items"
+            />
+          </Link>
         </StaggerItem>
         <StaggerItem>
-          <DashboardCard
-            title="Low Stock Items"
-            value={loading ? "—" : stats?.low_stock_items ?? 0}
-            icon={AlertTriangle}
-            variant={stats?.low_stock_items ? "warning" : "default"}
-            subtitle={stats?.low_stock_items ? "Needs restocking" : "All items well-stocked"}
-          />
+          <Link href="/dashboard/inventory?stock_status=low" className="block">
+            <DashboardCard
+              title="Out of Stock"
+              value={loading ? "—" : stats?.low_stock_items ?? 0}
+              icon={AlertTriangle}
+              variant={stats?.low_stock_items ? "warning" : "default"}
+              subtitle={stats?.low_stock_items ? "Needs restocking" : "All items in stock"}
+            />
+          </Link>
         </StaggerItem>
         <StaggerItem>
-          <DashboardCard
-            title="Orders This Month"
-            value={loading ? "—" : stats?.monthly_orders ?? 0}
-            icon={ShoppingBag}
-            subtitle="Total orders placed"
-          />
+          <Link href="/dashboard/orders" className="block">
+            <DashboardCard
+              title="Orders This Month"
+              value={loading ? "—" : stats?.monthly_orders ?? 0}
+              icon={ShoppingBag}
+              subtitle="Total orders placed"
+            />
+          </Link>
         </StaggerItem>
         <StaggerItem>
-          <DashboardCard
-            title="Revenue This Month"
-            value={loading ? "—" : formatCurrency(stats?.monthly_revenue ?? 0)}
-            icon={DollarSign}
-            variant="success"
-            subtitle="Total sales revenue"
-          />
+          <Link href="/dashboard/analytics" className="block">
+            <DashboardCard
+              title="Revenue This Month"
+              value={loading ? "—" : formatCurrency(stats?.monthly_revenue ?? 0)}
+              icon={DollarSign}
+              variant="success"
+              subtitle="Total sales revenue"
+            />
+          </Link>
         </StaggerItem>
         <StaggerItem>
-          <DashboardCard
-            title="Profit This Month"
-            value={loading ? "—" : formatCurrency(stats?.monthly_profit ?? 0)}
-            icon={TrendingUp}
-            variant="success"
-            subtitle="After cost of goods"
-          />
+          <Link href="/dashboard/analytics" className="block">
+            <DashboardCard
+              title="Profit This Month"
+              value={loading ? "—" : formatCurrency(stats?.monthly_profit ?? 0)}
+              icon={TrendingUp}
+              variant="success"
+              subtitle="After cost of goods"
+            />
+          </Link>
         </StaggerItem>
         <StaggerItem>
-          <DashboardCard
-            title="Total Clients"
-            value={loading ? "—" : stats?.total_clients ?? 0}
-            icon={Users}
-            subtitle="Registered clients"
-          />
+          <Link href="/dashboard/clients" className="block">
+            <DashboardCard
+              title="Total Clients"
+              value={loading ? "—" : stats?.total_clients ?? 0}
+              icon={Users}
+              subtitle="Registered clients"
+            />
+          </Link>
         </StaggerItem>
       </StaggerContainer>
 
