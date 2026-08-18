@@ -4,6 +4,7 @@ export interface Category {
   icon: string | null;
   description: string | null;
   created_at: string;
+  product_count?: number;
 }
 
 export interface Product {

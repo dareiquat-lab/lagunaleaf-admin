@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit2, Trash2, Save, Tag } from "lucide-react";
+import Link from "next/link";
+import { Plus, Edit2, Trash2, Save, Tag, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,20 +105,34 @@ export default function CategoriesPage() {
             {categories.map((cat) => (
               <div
                 key={cat.id}
-                className="flex items-center justify-between px-6 py-4 hover:bg-[#FAFAF8] transition-colors"
+                className="flex items-center justify-between px-6 py-4 hover:bg-[#FAFAF8] transition-colors group"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#5A8A6E]/8 flex items-center justify-center text-xl">
+                {/* Clickable left section → inventory filtered by category */}
+                <Link
+                  href={`/dashboard/inventory?category_id=${cat.id}`}
+                  className="flex items-center gap-4 flex-1 min-w-0"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#5A8A6E]/10 flex items-center justify-center text-xl shrink-0">
                     {cat.icon || "📦"}
                   </div>
-                  <div>
-                    <p className="font-medium text-[#2D3B35] text-sm">{cat.name}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-[#2D3B35] text-sm group-hover:text-[#5A8A6E] transition-colors">
+                      {cat.name}
+                    </p>
                     {cat.description && (
-                      <p className="text-xs text-[#8A9A8E] mt-0.5">{cat.description}</p>
+                      <p className="text-xs text-[#8A9A8E] mt-0.5 truncate">{cat.description}</p>
                     )}
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2 ml-3 shrink-0">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#5A8A6E]/10 text-[#5A8A6E]">
+                      {cat.product_count ?? 0} {cat.product_count === 1 ? "item" : "items"}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-[#8A9A8E] group-hover:text-[#5A8A6E] transition-colors" />
+                  </div>
+                </Link>
+
+                {/* Edit / delete buttons */}
+                <div className="flex items-center gap-1 ml-3 shrink-0">
                   <button
                     onClick={() => openDialog(cat)}
                     className="p-2 rounded-lg text-[#8A9A8E] hover:text-[#5A8A6E] hover:bg-[#5A8A6E]/10 transition-colors"

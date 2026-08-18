@@ -7,7 +7,13 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const sql = getDb();
-  const categories = await sql`SELECT * FROM categories ORDER BY name ASC`;
+  const categories = await sql`
+    SELECT c.*, COUNT(p.id)::int AS product_count
+    FROM categories c
+    LEFT JOIN products p ON p.category_id = c.id AND p.is_active = true
+    GROUP BY c.id
+    ORDER BY c.name ASC
+  `;
   return NextResponse.json(categories);
 }
 
