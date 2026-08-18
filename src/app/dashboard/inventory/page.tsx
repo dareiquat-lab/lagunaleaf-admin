@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, Search, Edit2, Trash2, Package, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, ChevronUp, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,17 +16,30 @@ import { Product, Category } from "@/lib/types";
 import { formatCurrency, calculateMargin, getMarginBg, cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-export default function InventoryPage() {
+function InventoryContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [stockFilter, setStockFilter] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category_id") || "all");
+  const [stockFilter, setStockFilter] = useState(searchParams.get("stock_status") || "all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [stockEdits, setStockEdits] = useState<Record<number, string>>({});
+
+  // Keep URL in sync with active filters
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (categoryFilter !== "all") params.set("category_id", categoryFilter);
+    if (stockFilter !== "all") params.set("stock_status", stockFilter);
+    const qs = params.toString();
+    router.replace(`/dashboard/inventory${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [search, categoryFilter, stockFilter, router]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -38,13 +52,22 @@ export default function InventoryPage() {
     setLoading(false);
   }, [search, categoryFilter, stockFilter]);
 
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   useEffect(() => {
     fetch("/api/categories").then((r) => r.json()).then(setCategories);
   }, []);
+
+  function clearFilters() {
+    setSearch("");
+    setCategoryFilter("all");
+    setStockFilter("all");
+  }
+
+  const hasFilters = search || categoryFilter !== "all" || stockFilter !== "all";
+  const activeCategoryName = categoryFilter !== "all"
+    ? categories.find((c) => c.id.toString() === categoryFilter)?.name
+    : null;
 
   async function handleDelete(id: number) {
     await fetch(`/api/products/${id}`, { method: "DELETE" });
@@ -83,7 +106,9 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-[#2D3B35] tracking-tight">Inventory</h1>
-          <p className="text-sm text-[#8A9A8E] mt-1">{products.length} products total</p>
+          <p className="text-sm text-[#8A9A8E] mt-1">
+            {loading ? "Loading…" : `${products.length} product${products.length !== 1 ? "s" : ""}${activeCategoryName ? ` in ${activeCategoryName}` : ""}`}
+          </p>
         </div>
         <Button onClick={() => { setEditProduct(null); setDialogOpen(true); }}>
           <Plus className="h-4 w-4" />
@@ -92,12 +117,12 @@ export default function InventoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8A9A8E]" />
           <Input
             className="pl-9"
-            placeholder="Search products..."
+            placeholder="Search products…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -109,7 +134,9 @@ export default function InventoryPage() {
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
             {categories.map((c) => (
-              <SelectItem key={c.id} value={c.id.toString()}>{c.icon} {c.name}</SelectItem>
+              <SelectItem key={c.id} value={c.id.toString()}>
+                {c.icon} {c.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -119,11 +146,32 @@ export default function InventoryPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All stock</SelectItem>
-            <SelectItem value="low">Low stock</SelectItem>
             <SelectItem value="out">Out of stock</SelectItem>
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-[#8A9A8E] hover:text-[#D97B6C]">
+            <X className="h-3.5 w-3.5" />
+            Clear filters
+          </Button>
+        )}
       </div>
+
+      {/* Active category banner */}
+      {activeCategoryName && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-[#5A8A6E]/8 border border-[#5A8A6E]/20 rounded-xl text-sm">
+          <span className="text-[#5A8A6E] font-medium">
+            {categories.find((c) => c.id.toString() === categoryFilter)?.icon} {activeCategoryName}
+          </span>
+          <span className="text-[#8A9A8E]">— showing filtered results</span>
+          <button
+            onClick={() => setCategoryFilter("all")}
+            className="ml-auto text-[#8A9A8E] hover:text-[#D97B6C] transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-[#E8EDE9] overflow-hidden">
@@ -158,7 +206,14 @@ export default function InventoryPage() {
                 <tr>
                   <td colSpan={10} className="py-16 text-center">
                     <Package className="h-10 w-10 text-[#E8EDE9] mx-auto mb-3" />
-                    <p className="text-sm text-[#8A9A8E]">No products found. Add your first product.</p>
+                    <p className="text-sm text-[#8A9A8E]">
+                      {hasFilters ? "No products match your filters." : "No products found. Add your first product."}
+                    </p>
+                    {hasFilters && (
+                      <button onClick={clearFilters} className="text-sm text-[#5A8A6E] hover:underline mt-1">
+                        Clear filters →
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -187,7 +242,18 @@ export default function InventoryPage() {
                         {product.unit && <p className="text-xs text-[#8A9A8E]">{product.unit}</p>}
                       </td>
                       <td className="px-4 py-3 text-[#8A9A8E] font-mono text-xs">{product.sku || "—"}</td>
-                      <td className="px-4 py-3 text-[#8A9A8E]">{product.category_name || "—"}</td>
+                      <td className="px-4 py-3">
+                        {product.category_name ? (
+                          <button
+                            onClick={() => setCategoryFilter(product.category_id?.toString() || "all")}
+                            className="text-xs px-2 py-0.5 rounded-full bg-[#5A8A6E]/10 text-[#5A8A6E] hover:bg-[#5A8A6E]/20 transition-colors"
+                          >
+                            {product.category_name}
+                          </button>
+                        ) : (
+                          <span className="text-[#8A9A8E]">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right text-[#2D3B35]">{formatCurrency(Number(product.cost_price))}</td>
                       <td className="px-4 py-3 text-right font-medium text-[#2D3B35]">{formatCurrency(Number(product.sale_price))}</td>
                       <td className="px-4 py-3 text-center">
@@ -291,5 +357,13 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
     </PageTransition>
+  );
+}
+
+export default function InventoryPage() {
+  return (
+    <Suspense>
+      <InventoryContent />
+    </Suspense>
   );
 }
