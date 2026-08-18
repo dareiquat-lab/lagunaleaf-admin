@@ -24,6 +24,7 @@ interface ParsedOrder {
   items: ParsedOrderItem[];
   notes: string | null;
   ordered_at: string | null;
+  message_fingerprint?: string;
 }
 
 interface ParsedInvoiceItem {
@@ -55,6 +56,7 @@ export default function ImportPage() {
   // Parsed results (editable)
   const [orderData, setOrderData] = useState<ParsedOrder | null>(null);
   const [invoiceData, setInvoiceData] = useState<ParsedInvoice | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   function handleFileChange(f: File) {
     setFile(f);
@@ -75,8 +77,31 @@ export default function ImportPage() {
       const res = await fetch("/api/ai-parse", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Parse failed");
-      if (mode === "order") setOrderData(json.data as ParsedOrder);
-      else setInvoiceData(json.data as ParsedInvoice);
+      if (mode === "order") {
+        const parsed = json.data as ParsedOrder;
+        setOrderData(parsed);
+
+        // Duplicate check — look for recent orders with same client + similar items
+        if (parsed.client.first_name || parsed.items.length > 0) {
+          const search = parsed.client.first_name
+            ? `${parsed.client.first_name} ${parsed.client.last_name}`.trim()
+            : parsed.items[0]?.product_name || "";
+          const recentRes = await fetch(`/api/orders?search=${encodeURIComponent(search)}&limit=5`);
+          const recent = await recentRes.json();
+          if (recent.length > 0 && parsed.client.first_name) {
+            const match = recent.find((o: { client_name?: string }) =>
+              o.client_name?.toLowerCase().includes(parsed.client.first_name.toLowerCase())
+            );
+            if (match) {
+              setDuplicateWarning(
+                `A recent order already exists for ${match.client_name} (#${match.order_number}). Review carefully before saving.`
+              );
+            }
+          }
+        }
+      } else {
+        setInvoiceData(json.data as ParsedInvoice);
+      }
       setStep("review");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to parse document");
@@ -233,6 +258,7 @@ export default function ImportPage() {
     setPreview(null);
     setOrderData(null);
     setInvoiceData(null);
+    setDuplicateWarning(null);
     setStep("upload");
   }
 
@@ -365,6 +391,24 @@ export default function ImportPage() {
             <p className="font-medium text-[#2D3B35]">Review extracted order</p>
             <button onClick={reset} className="text-sm text-[#8A9A8E] hover:text-[#D97B6C]">← Start over</button>
           </div>
+
+          {duplicateWarning && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-[#D4A853]/10 border border-[#D4A853]/30 text-sm">
+              <AlertCircle className="h-4 w-4 text-[#D4A853] mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-[#2D3B35]">Possible duplicate</p>
+                <p className="text-[#8A9A8E] mt-0.5">{duplicateWarning}</p>
+              </div>
+              <button onClick={() => setDuplicateWarning(null)} className="text-[#8A9A8E] hover:text-[#D97B6C]"><X className="h-4 w-4" /></button>
+            </div>
+          )}
+
+          {!orderData?.client.first_name && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-[#5A8A6E]/8 border border-[#5A8A6E]/20 text-sm">
+              <AlertCircle className="h-4 w-4 text-[#5A8A6E] mt-0.5 shrink-0" />
+              <p className="text-[#5A8A6E]">No client name found in the message — please enter it manually below.</p>
+            </div>
+          )}
 
           {/* Client */}
           <Card>
