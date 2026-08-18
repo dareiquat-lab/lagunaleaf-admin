@@ -76,7 +76,7 @@ export default function InventoryPage() {
     fetchProducts();
   }
 
-  const isLowStock = (p: Product) => p.stock_quantity <= p.low_stock_threshold;
+  const isLowStock = (p: Product) => p.stock_quantity === 0;
 
   return (
     <PageTransition className="p-6 lg:p-8 space-y-6">
