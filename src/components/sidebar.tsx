@@ -19,6 +19,7 @@ import {
   Leaf,
   Sun,
   Moon,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/employees", label: "Employees", icon: UserCheck },
   { href: "/dashboard/categories", label: "Categories", icon: Tag },
+  { href: "/dashboard/import", label: "AI Import", icon: Sparkles },
 ];
 
 interface SidebarProps {

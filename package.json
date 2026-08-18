@@ -10,6 +10,7 @@
     "migrate": "npx tsx src/scripts/migrate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "@auth/core": "^0.41.3",
     "@neondatabase/serverless": "^1.1.0",
     "@radix-ui/react-avatar": "^1.2.6",

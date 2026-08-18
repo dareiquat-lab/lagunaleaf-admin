@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     SELECT
       COALESCE(SUM(o.total), 0) as total_revenue,
       COALESCE(SUM(
-        o.total - o.discount - COALESCE((
+        o.total - COALESCE((
           SELECT SUM(oi.quantity * oi.unit_cost)
           FROM order_items oi WHERE oi.order_id = o.id
         ), 0)
