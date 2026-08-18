@@ -106,19 +106,32 @@ export async function POST(req: NextRequest) {
     ? ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } } as const)
     : ({ type: "image", source: { type: "base64", media_type: imageType, data: base64 } } as const);
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [
-      {
-        role: "user",
-        content: [
-          contentBlock,
-          { type: "text", text: prompt },
-        ],
-      },
-    ],
-  });
+  let message;
+  try {
+    message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      messages: [
+        {
+          role: "user",
+          content: [
+            contentBlock,
+            { type: "text", text: prompt },
+          ],
+        },
+      ],
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Bubble up meaningful errors to the client
+    if (msg.includes("credit balance")) {
+      return NextResponse.json({ error: "Anthropic account has no credits. Go to console.anthropic.com → Plans & Billing to add credits." }, { status: 402 });
+    }
+    if (msg.includes("API key")) {
+      return NextResponse.json({ error: "Invalid Anthropic API key. Check your ANTHROPIC_API_KEY environment variable." }, { status: 401 });
+    }
+    return NextResponse.json({ error: `Claude API error: ${msg}` }, { status: 500 });
+  }
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
 
