@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, FileImage, FileText, Loader2, CheckCircle, AlertCircle, ShoppingBag, Package, X, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,11 @@ export default function ImportPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/ai-parse/status").then(r => r.json()).then(d => setApiKeyMissing(!d.configured));
+  }, []);
 
   // Parsed results (editable)
   const [orderData, setOrderData] = useState<ParsedOrder | null>(null);
@@ -521,16 +526,18 @@ export default function ImportPage() {
         </Card>
       )}
 
-      {/* No API key warning */}
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-[#D4A853]/10 border border-[#D4A853]/30 text-sm">
-        <AlertCircle className="h-4 w-4 text-[#D4A853] mt-0.5 shrink-0" />
-        <div>
-          <p className="font-medium text-[#2D3B35]">Requires ANTHROPIC_API_KEY</p>
-          <p className="text-[#8A9A8E] mt-0.5">
-            Add <code className="bg-[#D4A853]/15 px-1 rounded">ANTHROPIC_API_KEY</code> to your Vercel environment variables and <code className="bg-[#D4A853]/15 px-1 rounded">.env.local</code> to enable AI parsing.
-          </p>
+      {/* Only show if key is actually missing */}
+      {apiKeyMissing && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-[#D4A853]/10 border border-[#D4A853]/30 text-sm">
+          <AlertCircle className="h-4 w-4 text-[#D4A853] mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-[#2D3B35]">Requires ANTHROPIC_API_KEY</p>
+            <p className="text-[#8A9A8E] mt-0.5">
+              Add <code className="bg-[#D4A853]/15 px-1 rounded">ANTHROPIC_API_KEY</code> to your Vercel environment variables and <code className="bg-[#D4A853]/15 px-1 rounded">.env.local</code> to enable AI parsing.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </PageTransition>
   );
 }
