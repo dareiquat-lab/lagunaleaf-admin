@@ -80,10 +80,21 @@ export async function POST(req: NextRequest) {
 
   const bytes = await file.arrayBuffer();
   const base64 = Buffer.from(bytes).toString("base64");
-  const mimeType = file.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp" | "application/pdf";
+  const rawType = file.type || "image/jpeg";
 
-  const isImage = mimeType.startsWith("image/");
-  const isPdf = mimeType === "application/pdf";
+  const isPdf = rawType === "application/pdf";
+
+  // Anthropic only accepts these four image types — normalise everything else to jpeg
+  const SUPPORTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+  type SupportedImage = typeof SUPPORTED_IMAGE_TYPES[number];
+
+  let imageType: SupportedImage = "image/jpeg";
+  if (rawType === "image/png") imageType = "image/png";
+  else if (rawType === "image/gif") imageType = "image/gif";
+  else if (rawType === "image/webp") imageType = "image/webp";
+  // image/heic, image/heif, image/jpg, unknown → default jpeg (Claude handles it fine)
+
+  const isImage = rawType.startsWith("image/") || !rawType;
 
   if (!isImage && !isPdf) {
     return NextResponse.json({ error: "Only images and PDFs are supported" }, { status: 400 });
@@ -93,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   const contentBlock = isPdf
     ? ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } } as const)
-    : ({ type: "image", source: { type: "base64", media_type: mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: base64 } } as const);
+    : ({ type: "image", source: { type: "base64", media_type: imageType, data: base64 } } as const);
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
