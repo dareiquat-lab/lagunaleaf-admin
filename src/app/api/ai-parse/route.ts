@@ -4,41 +4,44 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const ORDER_PROMPT = `You are parsing a screenshot of a customer order received via chat (WhatsApp, iMessage, SMS, Instagram DM, etc.).
+const ORDER_PROMPT = `You are parsing a screenshot of a chat that may contain ONE OR MORE customer orders (WhatsApp, iMessage, SMS, Telegram, Instagram DM, etc.).
+
+CRITICAL — extract EVERY separate order visible in the screenshot as its own entry.
 
 CRITICAL — client name rules:
-- The contact name or phone number shown at the TOP of the screenshot (the sender header) is NOT the client name. IGNORE IT.
-- The client's name is what they write about THEMSELVES inside the message body (e.g. "This is Maria", "It's Jake", "Hey it's David Smith", "My name is Lisa").
+- The contact name or phone number shown at the TOP of the screenshot (the sender/channel header) is NOT a client name. IGNORE IT.
+- Employee tags like "@Stephen", "@~Stephen", "~Dr.B" are staff names — NOT client names. IGNORE THEM.
+- The client's name is only what a customer writes about THEMSELVES in the message body (e.g. "This is Maria", "It's Jake", "Jirasak Soukchareon", "My name is Lisa").
 - If no name is stated inside the message body, leave first_name and last_name as empty strings.
 - Never use a phone number as a name.
-- Never use the WhatsApp/iMessage contact label as the client name.
-
-CRITICAL — duplicate detection:
-- Include a "message_fingerprint" field: a short string summarising the key order details (client name if known + items + quantities) so the caller can check for duplicates. Example: "maria-2x strawberry cough-1x gelato".
 
 Return ONLY valid JSON with no extra text:
 {
-  "client": {
-    "first_name": "string — from message body only, or empty string",
-    "last_name": "string — from message body only, or empty string",
-    "phone": "string — only if explicitly stated inside the message, otherwise null"
-  },
-  "items": [
+  "orders": [
     {
-      "product_name": "string — the product name as written in the message",
-      "quantity": number,
-      "unit_price": number or 0 if not stated
+      "client": {
+        "first_name": "string — from message body only, or empty string",
+        "last_name": "string — from message body only, or empty string",
+        "phone": "string — only if stated inside the message body, otherwise null"
+      },
+      "items": [
+        {
+          "product_name": "string — as written in the message",
+          "quantity": number,
+          "unit_price": number or 0 if not stated
+        }
+      ],
+      "notes": "any pickup/delivery/other notes or null",
+      "ordered_at": "ISO date string if mentioned, otherwise null",
+      "message_fingerprint": "short string: clientname-item1qty-item2qty etc"
     }
-  ],
-  "notes": "any extra notes from the message or null",
-  "ordered_at": "ISO date string if a date/time is mentioned, otherwise null",
-  "message_fingerprint": "short dedupe string"
+  ]
 }
 
 Additional rules:
 - Quantity defaults to 1 if not stated.
 - unit_price defaults to 0 if not stated.
-- Include ALL products mentioned, even if vague.
+- Each distinct customer message block = one order entry.
 - Return ONLY the JSON object, no markdown fences, no explanation.`;
 
 const INVOICE_PROMPT = `You are parsing an invoice image or PDF for a cannabis/wellness product supplier.
