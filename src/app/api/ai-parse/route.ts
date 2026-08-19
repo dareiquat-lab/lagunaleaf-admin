@@ -135,8 +135,16 @@ export async function POST(req: NextRequest) {
 
   const text = message.content[0].type === "text" ? message.content[0].text : "";
 
-  // Strip markdown code fences if Claude wraps in ```json
-  const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+  // Extract the JSON object by finding the outermost { ... } — handles
+  // code fences, preamble text, and any other wrapping Claude might add
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1) {
+    return NextResponse.json({ error: "Claude did not return a JSON object", raw: text }, { status: 422 });
+  }
+
+  const cleaned = text.slice(firstBrace, lastBrace + 1);
 
   try {
     const parsed = JSON.parse(cleaned);
