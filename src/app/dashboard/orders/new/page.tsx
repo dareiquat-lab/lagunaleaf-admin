@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Search, ChevronDown } from "lucide-react";
+import { ArrowLeft, Loader2, Search, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +73,7 @@ export default function NewOrderPage() {
     else setLastName(value);
   }
 
+  const hasNaPrices = items.some((i) => i.price_na);
   const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0);
   const discount = parseFloat(form.discount) || 0;
   const taxValue = taxMode === "percent"
@@ -120,7 +121,7 @@ export default function NewOrderPage() {
           discount,
           tax: taxValue,
           total,
-          items,
+          items: items.map(({ price_na: _na, ...item }) => item),
         }),
       });
 
@@ -336,6 +337,13 @@ export default function NewOrderPage() {
                 </div>
 
                 <Separator />
+
+                {hasNaPrices && (
+                  <div className="flex items-start gap-2 rounded-lg bg-[#D4A853]/10 border border-[#D4A853]/30 px-3 py-2 text-xs text-[#B8862A]">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    Some items have no price — set the total manually below.
+                  </div>
+                )}
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-[#8A9A8E]">

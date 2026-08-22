@@ -51,6 +51,7 @@ export interface OrderItem {
   unit_cost: number;
   unit_price: number;
   subtotal: number;
+  price_na?: boolean; // UI-only: price not known; treated as 0 for storage
 }
 
 export interface Order {
