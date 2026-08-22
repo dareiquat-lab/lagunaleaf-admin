@@ -32,7 +32,6 @@ export function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
   // ── Custom item ──────────────────────────────────────────────────────
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
-  const [customPriceNa, setCustomPriceNa] = useState(false);
 
   // Search products (autocomplete)
   async function searchProducts(q: string) {
@@ -87,11 +86,7 @@ export function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
 
   function addCustomItem() {
     if (!customName.trim()) return;
-    if (!customPriceNa) {
-      const price = parseFloat(customPrice);
-      if (isNaN(price) || price < 0) return;
-    }
-    const price = customPriceNa ? 0 : (parseFloat(customPrice) || 0);
+    const price = parseFloat(customPrice) || 0;
     onChange([...items, {
       product_id: null,
       product_name: customName.trim(),
@@ -99,24 +94,15 @@ export function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
       unit_cost: 0,
       unit_price: price,
       subtotal: price,
-      price_na: customPriceNa || undefined,
     }]);
     setCustomName("");
     setCustomPrice("");
-    setCustomPriceNa(false);
   }
 
-  function updateItem(index: number, key: "quantity" | "unit_price" | "product_name" | "price_na", value: string | number | boolean) {
+  function updateItem(index: number, key: "quantity" | "unit_price" | "product_name", value: string | number) {
     const updated = [...items];
     if (key === "product_name") {
       updated[index] = { ...updated[index], product_name: value as string };
-    } else if (key === "price_na") {
-      const na = value as boolean;
-      updated[index] = {
-        ...updated[index],
-        price_na: na || undefined,
-        ...(na ? { unit_price: 0, subtotal: 0 } : {}),
-      };
     } else {
       const num = Number(value);
       updated[index] = {
@@ -224,31 +210,15 @@ export function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
                     />
                   </td>
                   <td className="px-4 py-2">
-                    {item.price_na ? (
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span className="text-sm text-[#8A9A8E] italic">N/A</span>
-                        <button type="button" onClick={() => updateItem(i, "price_na", false)}
-                          className="text-[10px] text-[#5A8A6E] hover:underline">
-                          set
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 justify-end">
-                        <Input
-                          type="number" step="0.01" min="0"
-                          value={item.unit_price}
-                          onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
-                          className="text-right h-8 w-20"
-                        />
-                        <button type="button" onClick={() => updateItem(i, "price_na", true)}
-                          className="text-[10px] text-[#8A9A8E] hover:text-[#D97B6C] hover:underline shrink-0">
-                          N/A
-                        </button>
-                      </div>
-                    )}
+                    <Input
+                      type="number" step="0.01" min="0"
+                      value={item.unit_price}
+                      onChange={(e) => updateItem(i, "unit_price", parseFloat(e.target.value) || 0)}
+                      className="text-right h-8 w-24 ml-auto"
+                    />
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium text-[#2D3B35]">
-                    {item.price_na ? <span className="text-[#8A9A8E]">—</span> : formatCurrency(item.subtotal)}
+                    {formatCurrency(item.subtotal)}
                   </td>
                   <td className="px-2 py-2">
                     <button type="button" onClick={() => removeItem(i)}
@@ -273,33 +243,19 @@ export function OrderItemsEditor({ items, onChange }: OrderItemsEditorProps) {
           onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
           className="h-9 flex-1"
         />
-        {customPriceNa ? (
-          <div className="flex items-center gap-1.5 w-28 shrink-0">
-            <span className="text-sm text-[#8A9A8E] italic flex-1 text-right">N/A</span>
-            <button type="button" onClick={() => setCustomPriceNa(false)}
-              className="text-[10px] text-[#5A8A6E] hover:underline">
-              set $
-            </button>
-          </div>
-        ) : (
-          <div className="relative w-28 shrink-0">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9A8E] text-sm pointer-events-none">$</span>
-            <Input
-              type="number" step="0.01" min="0"
-              placeholder="0.00"
-              value={customPrice}
-              onChange={(e) => setCustomPrice(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
-              className="pl-6 h-9"
-            />
-          </div>
-        )}
-        <button type="button" onClick={() => setCustomPriceNa((v) => !v)}
-          className={`text-[10px] shrink-0 hover:underline ${customPriceNa ? "text-[#D97B6C]" : "text-[#8A9A8E]"}`}>
-          {customPriceNa ? "has price" : "N/A"}
-        </button>
+        <div className="relative w-28 shrink-0">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9A8E] text-sm pointer-events-none">$</span>
+          <Input
+            type="number" step="0.01" min="0"
+            placeholder="0.00"
+            value={customPrice}
+            onChange={(e) => setCustomPrice(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
+            className="pl-6 h-9"
+          />
+        </div>
         <Button type="button" size="sm" variant="outline" onClick={addCustomItem}
-          disabled={!customName.trim() || (!customPriceNa && !customPrice)}
+          disabled={!customName.trim()}
           className="shrink-0">
           <Plus className="h-3.5 w-3.5" />
           Add

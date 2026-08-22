@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, FileImage, FileText, Loader2, CheckCircle, AlertCircle, ShoppingBag, Package, X, Plus, Minus, RotateCcw } from "lucide-react";
+import { Upload, FileImage, FileText, Loader2, CheckCircle, AlertCircle, ShoppingBag, Package, X, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,6 @@ interface ParsedOrderItem {
   product_name: string;
   quantity: number;
   unit_price: number;
-  price_na?: boolean;
 }
 interface ParsedOrder {
   client: { first_name: string; last_name: string; phone: string | null };
@@ -26,7 +25,7 @@ interface ParsedOrder {
   notes: string | null;
   ordered_at: string | null;
   message_fingerprint?: string;
-  total_override?: number;
+  total_override?: string; // raw string so the input never reformats while typing
 }
 
 interface ParsedInvoiceItem {
@@ -175,19 +174,19 @@ export default function ImportPage() {
             p.name.toLowerCase().includes(item.product_name.toLowerCase()) ||
             item.product_name.toLowerCase().includes(p.name.toLowerCase())
           );
-          const unitPrice = item.price_na ? 0 : item.unit_price;
           return {
             product_id: match?.id || null,
             product_name: item.product_name,
             quantity: item.quantity,
             unit_cost: match ? Number(match.cost_price) : 0,
-            unit_price: unitPrice,
-            subtotal: item.quantity * unitPrice,
+            unit_price: item.unit_price,
+            subtotal: item.quantity * item.unit_price,
           };
         });
 
         const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-        const total = typeof orderData.total_override === "number" ? orderData.total_override : subtotal;
+        const parsedOverride = orderData.total_override !== undefined ? parseFloat(orderData.total_override) : NaN;
+        const total = !isNaN(parsedOverride) ? parsedOverride : subtotal;
 
         const oRes = await fetch("/api/orders", {
           method: "POST",
@@ -532,7 +531,7 @@ export default function ImportPage() {
                   {order.items.map((item, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-center">
                       <Input
-                        className="col-span-5 text-sm"
+                        className="col-span-6 text-sm"
                         value={item.product_name}
                         onChange={(e) => updateOrder(idx, o => {
                           const items = [...o.items];
@@ -556,38 +555,18 @@ export default function ImportPage() {
                           <Plus className="h-3 w-3" />
                         </button>
                       </div>
-                      <div className="col-span-4 flex items-center gap-1">
-                        {item.price_na ? (
-                          <>
-                            <span className="text-sm text-[#8A9A8E] italic flex-1 text-right">N/A</span>
-                            <button
-                              onClick={() => updateOrder(idx, o => { const items = [...o.items]; items[i] = { ...items[i], price_na: false }; return { ...o, items }; })}
-                              className="text-[10px] text-[#5A8A6E] hover:underline shrink-0"
-                            >
-                              set
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[#8A9A8E] text-sm">$</span>
-                            <Input
-                              type="number"
-                              className="text-sm"
-                              value={item.unit_price}
-                              onChange={(e) => updateOrder(idx, o => {
-                                const items = [...o.items];
-                                items[i] = { ...items[i], unit_price: parseFloat(e.target.value) || 0 };
-                                return { ...o, items };
-                              })}
-                            />
-                            <button
-                              onClick={() => updateOrder(idx, o => { const items = [...o.items]; items[i] = { ...items[i], price_na: true, unit_price: 0 }; return { ...o, items }; })}
-                              className="text-[10px] text-[#8A9A8E] hover:text-[#D97B6C] hover:underline shrink-0"
-                            >
-                              N/A
-                            </button>
-                          </>
-                        )}
+                      <div className="col-span-3 flex items-center gap-1">
+                        <span className="text-[#8A9A8E] text-sm">$</span>
+                        <Input
+                          type="number"
+                          className="text-sm"
+                          value={item.unit_price}
+                          onChange={(e) => updateOrder(idx, o => {
+                            const items = [...o.items];
+                            items[i] = { ...items[i], unit_price: parseFloat(e.target.value) || 0 };
+                            return { ...o, items };
+                          })}
+                        />
                       </div>
                       <button
                         onClick={() => updateOrder(idx, o => ({ ...o, items: o.items.filter((_, j) => j !== i) }))}
@@ -603,42 +582,27 @@ export default function ImportPage() {
                   >
                     + Add item
                   </button>
-                  {(() => {
-                    const knownTotal = order.items.reduce((s, it) => s + (it.price_na ? 0 : it.quantity * it.unit_price), 0);
-                    const hasNa = order.items.some(it => it.price_na);
-                    const displayTotal = typeof order.total_override === "number" ? order.total_override : knownTotal;
-                    return (
-                      <div className="pt-2 border-t border-[#E8EDE9] space-y-1.5">
-                        {hasNa && (
-                          <p className="text-xs text-[#D4A853] flex items-center gap-1.5">
-                            <AlertCircle className="h-3 w-3 shrink-0" />
-                            Some prices are N/A — enter the total manually.
-                          </p>
-                        )}
-                        <div className="flex items-center justify-end gap-2 text-sm font-medium text-[#2D3B35]">
-                          <span>Total</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[#8A9A8E]">$</span>
-                            <Input
-                              type="number" step="0.01" min="0"
-                              className={`h-7 w-28 text-right text-sm font-semibold ${hasNa || typeof order.total_override === "number" ? "border-[#D4A853] focus:border-[#D4A853]" : ""}`}
-                              value={displayTotal.toFixed(2)}
-                              onChange={(e) => updateOrder(idx, o => ({ ...o, total_override: parseFloat(e.target.value) || 0 }))}
-                            />
-                          </div>
-                          {typeof order.total_override === "number" && (
-                            <button
-                              onClick={() => updateOrder(idx, o => { const { total_override: _, ...rest } = o; return rest as ParsedOrder; })}
-                              className="text-[#8A9A8E] hover:text-[#D97B6C]"
-                              title="Reset to computed total"
-                            >
-                              <RotateCcw className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="pt-2 border-t border-[#E8EDE9] flex items-center justify-end gap-2 text-sm font-medium text-[#2D3B35]">
+                    <span>Total</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[#8A9A8E]">$</span>
+                      <Input
+                        type="number" step="0.01" min="0"
+                        className="h-7 w-28 text-right text-sm font-semibold"
+                        value={order.total_override ?? order.items.reduce((s, it) => s + it.quantity * it.unit_price, 0).toFixed(2)}
+                        placeholder="0.00"
+                        onChange={(e) => updateOrder(idx, o => ({ ...o, total_override: e.target.value }))}
+                      />
+                    </div>
+                    {order.total_override !== undefined && (
+                      <button
+                        onClick={() => updateOrder(idx, o => { const { total_override: _, ...rest } = o; return rest as ParsedOrder; })}
+                        className="text-[10px] text-[#8A9A8E] hover:text-[#D97B6C] hover:underline"
+                      >
+                        reset
+                      </button>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
