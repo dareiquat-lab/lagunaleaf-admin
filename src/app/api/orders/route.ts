@@ -41,6 +41,44 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(orders);
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || "";
+  const statusFilter = searchParams.get("status");
+  const paymentFilter = searchParams.get("payment_status");
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+
+  const body = await req.json();
+  const sql = getDb();
+
+  const updated = await sql`
+    UPDATE orders SET
+      status         = COALESCE(${body.status         ?? null}, status),
+      payment_status = COALESCE(${body.payment_status ?? null}, payment_status),
+      updated_at     = NOW()
+    WHERE (
+      ${search
+        ? sql`(order_number ILIKE ${"%" + search + "%"} OR EXISTS (
+            SELECT 1 FROM clients c
+            WHERE c.id = client_id
+            AND CONCAT(c.first_name, ' ', c.last_name) ILIKE ${"%" + search + "%"}
+          ))`
+        : sql`TRUE`}
+    )
+    AND (${statusFilter  ? sql`status         = ${statusFilter}`  : sql`TRUE`})
+    AND (${paymentFilter ? sql`payment_status = ${paymentFilter}` : sql`TRUE`})
+    AND (${from ? sql`ordered_at >= ${from}::timestamp` : sql`TRUE`})
+    AND (${to   ? sql`ordered_at <= ${to}::timestamp`   : sql`TRUE`})
+    RETURNING id
+  `;
+
+  return NextResponse.json({ updated: updated.length });
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

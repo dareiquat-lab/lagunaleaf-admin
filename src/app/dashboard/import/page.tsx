@@ -198,8 +198,8 @@ export default function ImportPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               client_id: clientId,
-              status: "pending",
-              payment_status: "unpaid",
+              status: "completed",
+              payment_status: "paid",
               subtotal,
               discount: 0,
               tax: 0,

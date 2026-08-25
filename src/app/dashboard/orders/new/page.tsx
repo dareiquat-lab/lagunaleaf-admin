@@ -36,9 +36,9 @@ export default function NewOrderPage() {
   const now = new Date();
   const [form, setForm] = useState({
     ordered_at: format(now, "yyyy-MM-dd'T'HH:mm"),
-    status: "pending",
+    status: "completed",
     payment_method: "cash",
-    payment_status: "unpaid",
+    payment_status: "paid",
     discount: "0",
     tax: "0",
     notes: "",

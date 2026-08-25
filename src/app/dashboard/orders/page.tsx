@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Search, Trash2, ShoppingBag, ExternalLink, CalendarIcon, X, ChevronDown } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ExternalLink, CalendarIcon, X, ChevronDown, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -79,6 +79,8 @@ export default function OrdersPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [confirmMarkAll, setConfirmMarkAll] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -128,6 +130,30 @@ export default function OrdersPage() {
     fetchOrders();
   }
 
+  async function markAllPaidAndCompleted() {
+    setMarkingAll(true);
+    setConfirmMarkAll(false);
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (paymentFilter !== "all") params.set("payment_status", paymentFilter);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo + "T23:59:59");
+    const res = await fetch(`/api/orders?${params}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed", payment_status: "paid" }),
+    });
+    if (res.ok) {
+      const { updated } = await res.json();
+      toast.success(`${updated} order${updated !== 1 ? "s" : ""} marked as paid & completed`);
+      fetchOrders();
+    } else {
+      toast.error("Failed to update orders");
+    }
+    setMarkingAll(false);
+  }
+
   return (
     <PageTransition className="p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -135,12 +161,23 @@ export default function OrdersPage() {
           <h1 className="text-2xl font-semibold text-[#2D3B35] tracking-tight">Orders</h1>
           <p className="text-sm text-[#8A9A8E] mt-1">{orders.length} orders found</p>
         </div>
-        <Link href="/dashboard/orders/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            New Order
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setConfirmMarkAll(true)}
+            disabled={markingAll || orders.length === 0}
+            className="text-[#5A8A6E] border-[#5A8A6E]/30 hover:bg-[#5A8A6E]/5 hover:border-[#5A8A6E]"
+          >
+            <CheckCheck className="h-4 w-4" />
+            Mark All Paid & Completed
           </Button>
-        </Link>
+          <Link href="/dashboard/orders/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              New Order
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -290,6 +327,30 @@ export default function OrdersPage() {
           </table>
         </div>
       </div>
+
+      {/* Mark All Confirmation */}
+      <Dialog open={confirmMarkAll} onOpenChange={(o) => !o && setConfirmMarkAll(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mark All Paid & Completed</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#8A9A8E]">
+            This will update {hasFilters ? "all filtered" : "all"} orders ({orders.length}) to{" "}
+            <strong className="text-[#2D3B35]">Completed</strong> /{" "}
+            <strong className="text-[#2D3B35]">Paid</strong>. This saves to the database immediately.
+          </p>
+          <div className="flex gap-2 justify-end mt-2">
+            <Button variant="outline" onClick={() => setConfirmMarkAll(false)}>Cancel</Button>
+            <Button
+              onClick={markAllPaidAndCompleted}
+              className="bg-[#5A8A6E] hover:bg-[#4A7A5E] text-white"
+            >
+              <CheckCheck className="h-4 w-4" />
+              Confirm
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
