@@ -153,70 +153,93 @@ export default function ImportPage() {
 
       let successCount = 0;
       let lastOrderId: number | null = null;
+      const failures: string[] = [];
 
-      for (const orderData of ordersData) {
-        let clientId: number | null = null;
-        if (orderData.client.first_name) {
-          const cRes = await fetch("/api/clients", {
+      for (let oi = 0; oi < ordersData.length; oi++) {
+        const orderData = ordersData[oi];
+        try {
+          let clientId: number | null = null;
+          if (orderData.client.first_name) {
+            const cRes = await fetch("/api/clients", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                first_name: orderData.client.first_name,
+                last_name: orderData.client.last_name || "—",
+                phone: orderData.client.phone || null,
+              }),
+            });
+            if (cRes.ok) clientId = (await cRes.json()).id;
+          }
+
+          const items = orderData.items.map((item) => {
+            const match = products.find((p: { name: string; cost_price: number; id: number }) =>
+              p.name.toLowerCase().includes(item.product_name.toLowerCase()) ||
+              item.product_name.toLowerCase().includes(p.name.toLowerCase())
+            );
+            const unitPrice = isNaN(item.unit_price) ? 0 : (item.unit_price || 0);
+            const unitCost = match ? Number(match.cost_price) : 0;
+            return {
+              product_id: match?.id || null,
+              product_name: item.product_name || "Unknown item",
+              quantity: item.quantity || 1,
+              unit_cost: isNaN(unitCost) ? 0 : unitCost,
+              unit_price: unitPrice,
+              subtotal: (item.quantity || 1) * unitPrice,
+            };
+          });
+
+          const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
+          const parsedOverride = orderData.total_override !== undefined ? parseFloat(orderData.total_override) : NaN;
+          const total = !isNaN(parsedOverride) ? parsedOverride : subtotal;
+
+          const oRes = await fetch("/api/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              first_name: orderData.client.first_name,
-              last_name: orderData.client.last_name || "—",
-              phone: orderData.client.phone || null,
+              client_id: clientId,
+              status: "pending",
+              payment_status: "unpaid",
+              subtotal,
+              discount: 0,
+              tax: 0,
+              total,
+              notes: orderData.notes || null,
+              ordered_at: orderData.ordered_at || new Date().toISOString(),
+              items,
             }),
           });
-          if (cRes.ok) clientId = (await cRes.json()).id;
+
+          if (!oRes.ok) {
+            const errJson = await oRes.json().catch(() => ({}));
+            const label = orderData.client.first_name || `Order ${oi + 1}`;
+            failures.push(`${label}: ${errJson.error || oRes.statusText}`);
+            continue;
+          }
+
+          const order = await oRes.json();
+          lastOrderId = order.id;
+          successCount++;
+        } catch (err: unknown) {
+          const label = orderData.client.first_name || `Order ${oi + 1}`;
+          failures.push(`${label}: ${err instanceof Error ? err.message : "Unknown error"}`);
         }
-
-        const items = orderData.items.map((item) => {
-          const match = products.find((p: { name: string; cost_price: number; id: number }) =>
-            p.name.toLowerCase().includes(item.product_name.toLowerCase()) ||
-            item.product_name.toLowerCase().includes(p.name.toLowerCase())
-          );
-          return {
-            product_id: match?.id || null,
-            product_name: item.product_name,
-            quantity: item.quantity,
-            unit_cost: match ? Number(match.cost_price) : 0,
-            unit_price: item.unit_price,
-            subtotal: item.quantity * item.unit_price,
-          };
-        });
-
-        const subtotal = items.reduce((s, i) => s + i.subtotal, 0);
-        const parsedOverride = orderData.total_override !== undefined ? parseFloat(orderData.total_override) : NaN;
-        const total = !isNaN(parsedOverride) ? parsedOverride : subtotal;
-
-        const oRes = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_id: clientId,
-            status: "pending",
-            payment_status: "unpaid",
-            subtotal,
-            discount: 0,
-            tax: 0,
-            total,
-            notes: orderData.notes || null,
-            ordered_at: orderData.ordered_at || new Date().toISOString(),
-            items,
-          }),
-        });
-
-        if (!oRes.ok) throw new Error("Failed to create order");
-        const order = await oRes.json();
-        lastOrderId = order.id;
-        successCount++;
       }
 
-      toast.success(`${successCount} order${successCount > 1 ? "s" : ""} created successfully`);
-      setStep("done");
-      setTimeout(
-        () => router.push(lastOrderId && successCount === 1 ? `/dashboard/orders/${lastOrderId}` : "/dashboard/orders"),
-        1200
-      );
+      if (successCount > 0) {
+        toast.success(`${successCount} order${successCount > 1 ? "s" : ""} created successfully${failures.length ? ` (${failures.length} failed)` : ""}`);
+        setStep("done");
+        setTimeout(
+          () => router.push(lastOrderId && successCount === 1 ? `/dashboard/orders/${lastOrderId}` : "/dashboard/orders"),
+          1200
+        );
+      } else {
+        toast.error(`All orders failed. First error: ${failures[0] || "Unknown"}`);
+      }
+
+      if (failures.length > 0 && successCount > 0) {
+        console.error("Some orders failed:", failures);
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to commit orders");
     } finally {
