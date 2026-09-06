@@ -142,7 +142,8 @@ export default function DashboardPage() {
       </div>
 
       {/* All-Time Sales Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2D3B35] to-[#3D5247] p-6 text-white">
+      <Link href="/dashboard/analytics?range=all_time" className="block">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2D3B35] to-[#3D5247] p-6 text-white transition-opacity hover:opacity-90">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white" />
           <div className="absolute -bottom-12 -left-4 h-52 w-52 rounded-full bg-white" />
@@ -163,6 +164,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      </Link>
 
       {/* Stats Grid */}
       <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -38,7 +38,10 @@ function getRange(range: DateRange, customFrom: string, customTo: string) {
 }
 
 export default function AnalyticsPage() {
-  const [range, setRange] = useState<DateRange>("month");
+  const searchParams = useSearchParams();
+  const [range, setRange] = useState<DateRange>(
+    (searchParams.get("range") as DateRange) || "month"
+  );
   const [customFrom, setCustomFrom] = useState(format(startOfMonth(new Date()), "yyyy-MM-dd"));
   const [customTo, setCustomTo] = useState(format(new Date(), "yyyy-MM-dd"));
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -85,14 +88,17 @@ export default function AnalyticsPage() {
       {/* Date Range */}
       <div className="flex flex-wrap items-center gap-2">
         {rangeButtons.map((btn) => (
-          <Button
+          <button
             key={btn.value}
-            variant={range === btn.value ? "default" : "outline"}
-            size="sm"
             onClick={() => setRange(btn.value)}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              range === btn.value
+                ? "bg-[#5A8A6E] text-white"
+                : "bg-[#E8EDE9] text-[#8A9A8E] hover:bg-[#D0DAD4] hover:text-[#2D3B35]"
+            }`}
           >
             {btn.label}
-          </Button>
+          </button>
         ))}
         {range === "custom" && (
           <div className="flex items-center gap-2">
