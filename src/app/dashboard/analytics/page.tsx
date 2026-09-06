@@ -17,21 +17,23 @@ import { formatCurrency } from "@/lib/utils";
 import { DollarSign, TrendingUp, ShoppingBag, BarChart3, Users } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 
-type DateRange = "week" | "month" | "last_month" | "custom";
+type DateRange = "week" | "month" | "last_month" | "all_time" | "custom";
 
 function getRange(range: DateRange, customFrom: string, customTo: string) {
   const now = new Date();
   switch (range) {
     case "week":
-      return { from: format(subDays(now, 7), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      return { from: format(subDays(now, 7), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd"), allTime: false };
     case "month":
-      return { from: format(startOfMonth(now), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
+      return { from: format(startOfMonth(now), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd"), allTime: false };
     case "last_month": {
       const lm = subMonths(now, 1);
-      return { from: format(startOfMonth(lm), "yyyy-MM-dd"), to: format(endOfMonth(lm), "yyyy-MM-dd") };
+      return { from: format(startOfMonth(lm), "yyyy-MM-dd"), to: format(endOfMonth(lm), "yyyy-MM-dd"), allTime: false };
     }
+    case "all_time":
+      return { from: "", to: "", allTime: true };
     case "custom":
-      return { from: customFrom, to: customTo };
+      return { from: customFrom, to: customTo, allTime: false };
   }
 }
 
@@ -46,8 +48,8 @@ export default function AnalyticsPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const { from, to } = getRange(range, customFrom, customTo);
-    const qs = `from=${from}&to=${to}`;
+    const { from, to, allTime } = getRange(range, customFrom, customTo);
+    const qs = allTime ? "all_time=true" : `from=${from}&to=${to}`;
     try {
       const [summaryRes, revenueRes, topRes] = await Promise.all([
         fetch(`/api/analytics/summary?${qs}`),
@@ -69,6 +71,7 @@ export default function AnalyticsPage() {
     { label: "This Week", value: "week" },
     { label: "This Month", value: "month" },
     { label: "Last Month", value: "last_month" },
+    { label: "All Time", value: "all_time" },
     { label: "Custom", value: "custom" },
   ];
 

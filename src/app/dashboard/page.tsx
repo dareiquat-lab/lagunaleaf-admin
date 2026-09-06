@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Package,
@@ -9,6 +9,7 @@ import {
   Users,
   TrendingUp,
   AlertTriangle,
+  Trophy,
 } from "lucide-react";
 import { DashboardCard } from "@/components/dashboard-card";
 import { PageTransition, StaggerContainer, StaggerItem } from "@/components/page-transition";
@@ -18,6 +19,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RevenueBarChart } from "@/components/analytics-charts";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { DashboardStats, Order, Product, RevenueDataPoint } from "@/lib/types";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+
+type ProfitView = "month" | "alltime" | "pick";
 
 function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
@@ -36,6 +40,13 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState<RevenueDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Profit card state
+  const [profitView, setProfitView] = useState<ProfitView>("month");
+  const [pickedMonth, setPickedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
+  const [pickedProfit, setPickedProfit] = useState<number | null>(null);
+  const [pickedRevenue, setPickedRevenue] = useState<number | null>(null);
+  const [pickedLoading, setPickedLoading] = useState(false);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -43,22 +54,23 @@ export default function DashboardPage() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
         const today = now.toISOString().split("T")[0];
 
-        const [summaryRes, ordersRes, productsRes, revenueRes] = await Promise.all([
+        const [summaryRes, ordersRes, productsRes, revenueRes, allTimeRes] = await Promise.all([
           fetch(`/api/analytics/summary?from=${monthStart}&to=${today}`),
           fetch("/api/orders?limit=10"),
           fetch("/api/products?stock_status=low"),
           fetch(`/api/analytics/revenue?from=${monthStart}&to=${today}`),
+          fetch(`/api/analytics/summary?all_time=true`),
         ]);
 
-        const [summary, orders, products, revenue] = await Promise.all([
+        const [summary, orders, products, revenue, allTime, allProducts, allClients] = await Promise.all([
           summaryRes.json(),
           ordersRes.json(),
           productsRes.json(),
           revenueRes.json(),
+          allTimeRes.json(),
+          fetch("/api/products").then((r) => r.json()),
+          fetch("/api/clients").then((r) => r.json()),
         ]);
-
-        const allProducts = await fetch("/api/products").then((r) => r.json());
-        const allClients = await fetch("/api/clients").then((r) => r.json());
 
         setStats({
           total_products: allProducts.length,
@@ -67,6 +79,8 @@ export default function DashboardPage() {
           monthly_revenue: Number(summary.total_revenue),
           monthly_profit: Number(summary.total_profit),
           total_clients: allClients.length,
+          alltime_revenue: Number(allTime.total_revenue),
+          alltime_profit: Number(allTime.total_profit),
         });
         setRecentOrders(orders);
         setLowStockProducts(products.slice(0, 5));
@@ -78,11 +92,77 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
+  const fetchPickedMonth = useCallback(async (month: string) => {
+    setPickedLoading(true);
+    try {
+      const [year, m] = month.split("-").map(Number);
+      const from = format(startOfMonth(new Date(year, m - 1)), "yyyy-MM-dd");
+      const to = format(endOfMonth(new Date(year, m - 1)), "yyyy-MM-dd");
+      const res = await fetch(`/api/analytics/summary?from=${from}&to=${to}`);
+      const data = await res.json();
+      setPickedProfit(Number(data.total_profit));
+      setPickedRevenue(Number(data.total_revenue));
+    } finally {
+      setPickedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (profitView === "pick") {
+      fetchPickedMonth(pickedMonth);
+    }
+  }, [profitView, pickedMonth, fetchPickedMonth]);
+
+  const profitValue = () => {
+    if (loading) return "—";
+    if (profitView === "month") return formatCurrency(stats?.monthly_profit ?? 0);
+    if (profitView === "alltime") return formatCurrency(stats?.alltime_profit ?? 0);
+    if (pickedLoading) return "…";
+    return pickedProfit !== null ? formatCurrency(pickedProfit) : "—";
+  };
+
+  const profitRevenue = () => {
+    if (profitView === "month") return stats?.monthly_revenue ?? 0;
+    if (profitView === "alltime") return stats?.alltime_revenue ?? 0;
+    return pickedRevenue ?? 0;
+  };
+
+  const profitSubtitle = () => {
+    if (profitView === "month") return "This month, after cost of goods";
+    if (profitView === "alltime") return "All time, after cost of goods";
+    const [year, m] = pickedMonth.split("-").map(Number);
+    return `${format(new Date(year, m - 1), "MMMM yyyy")}, after cost of goods`;
+  };
+
   return (
     <PageTransition className="p-6 lg:p-8 space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-[#2D3B35] tracking-tight">Dashboard</h1>
-        <p className="text-sm text-[#8A9A8E] mt-1">Welcome back — here&apos;s what&apos;s happening this month.</p>
+        <p className="text-sm text-[#8A9A8E] mt-1">Welcome back — here&apos;s what&apos;s happening.</p>
+      </div>
+
+      {/* All-Time Sales Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#2D3B35] to-[#3D5247] p-6 text-white">
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white" />
+          <div className="absolute -bottom-12 -left-4 h-52 w-52 rounded-full bg-white" />
+        </div>
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15">
+            <Trophy className="h-7 w-7 text-[#D4A853]" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-white/70">All-Time Total Sales</p>
+            {loading ? (
+              <Skeleton className="mt-1 h-9 w-48 bg-white/20" />
+            ) : (
+              <p className="text-4xl font-bold tracking-tight text-white">
+                {formatCurrency(stats?.alltime_revenue ?? 0)}
+              </p>
+            )}
+            <p className="mt-0.5 text-xs text-white/50">Every order, ever — you built this</p>
+          </div>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -129,17 +209,59 @@ export default function DashboardPage() {
             />
           </Link>
         </StaggerItem>
-        <StaggerItem>
-          <Link href="/dashboard/analytics" className="block">
-            <DashboardCard
-              title="Profit This Month"
-              value={loading ? "—" : formatCurrency(stats?.monthly_profit ?? 0)}
-              icon={TrendingUp}
-              variant="success"
-              subtitle="After cost of goods"
-            />
-          </Link>
+
+        {/* Profit card with toggle */}
+        <StaggerItem className="lg:col-span-2">
+          <Card className="overflow-hidden transition-all duration-150 hover:shadow-md hover:-translate-y-0.5">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2 min-w-0">
+                  <p className="text-sm font-medium text-[#8A9A8E]">Gross Profit</p>
+                  <p className="text-2xl font-semibold tracking-tight text-[#5A8A6E]">
+                    {profitValue()}
+                  </p>
+                  <p className="text-xs text-[#8A9A8E]">{profitSubtitle()}</p>
+                  {profitView !== "month" && !loading && (
+                    <p className="text-xs text-[#8A9A8E]">
+                      Revenue: {formatCurrency(profitRevenue())}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <div className="p-2.5 rounded-xl bg-[#5A8A6E]/10 text-[#5A8A6E]">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  {/* Toggle pills */}
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    {(["month", "alltime", "pick"] as ProfitView[]).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setProfitView(v)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          profitView === v
+                            ? "bg-[#5A8A6E] text-white"
+                            : "bg-[#E8EDE9] text-[#8A9A8E] hover:bg-[#D0DAD4]"
+                        }`}
+                      >
+                        {v === "month" ? "This Month" : v === "alltime" ? "All Time" : "Pick Month"}
+                      </button>
+                    ))}
+                  </div>
+                  {profitView === "pick" && (
+                    <input
+                      type="month"
+                      value={pickedMonth}
+                      max={format(new Date(), "yyyy-MM")}
+                      onChange={(e) => setPickedMonth(e.target.value)}
+                      className="text-xs border border-[#E8EDE9] rounded-lg px-2 py-1 text-[#2D3B35] focus:outline-none focus:ring-1 focus:ring-[#5A8A6E]"
+                    />
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </StaggerItem>
+
         <StaggerItem>
           <Link href="/dashboard/clients" className="block">
             <DashboardCard

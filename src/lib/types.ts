@@ -82,6 +82,8 @@ export interface DashboardStats {
   monthly_revenue: number;
   monthly_profit: number;
   total_clients: number;
+  alltime_revenue: number;
+  alltime_profit: number;
 }
 
 export interface RevenueDataPoint {
