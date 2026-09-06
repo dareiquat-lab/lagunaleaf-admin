@@ -160,7 +160,6 @@ export default function DashboardPage() {
                 {formatCurrency(stats?.alltime_revenue ?? 0)}
               </p>
             )}
-            <p className="mt-0.5 text-xs text-white/50">Every order, ever — you built this</p>
           </div>
         </div>
       </div>
