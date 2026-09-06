@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, FileImage, FileText, Loader2, CheckCircle, AlertCircle, ShoppingBag, Package, X, Plus, Minus } from "lucide-react";
+import { Upload, FileImage, FileText, Loader2, CheckCircle, AlertCircle, ShoppingBag, Package, X, Plus, Minus, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ interface ParsedOrder {
   notes: string | null;
   ordered_at: string | null;
   message_fingerprint?: string;
-  total_override?: string; // raw string so the input never reformats while typing
+  total_override?: string;
 }
 
 interface ParsedInvoiceItem {
@@ -37,6 +37,19 @@ interface ParsedInvoiceItem {
 interface ParsedInvoice {
   supplier: string | null;
   items: ParsedInvoiceItem[];
+}
+
+interface MatchedClient {
+  id: number;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  total_orders: number;
+  total_spent: number;
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/[^0-9]/g, "");
 }
 
 export default function ImportPage() {
@@ -56,7 +69,10 @@ export default function ImportPage() {
 
   const [ordersData, setOrdersData] = useState<ParsedOrder[]>([]);
   const [invoiceData, setInvoiceData] = useState<ParsedInvoice | null>(null);
-  const [duplicateWarnings, setDuplicateWarnings] = useState<Record<number, string>>({});
+
+  // Per-order client resolution
+  const [clientMatches, setClientMatches] = useState<Record<number, MatchedClient | null>>({});
+  const [useExisting, setUseExisting] = useState<Record<number, boolean>>({});
 
   function addFiles(newFiles: File[]) {
     const updated = [...files, ...newFiles];
@@ -88,20 +104,30 @@ export default function ImportPage() {
         }
         setOrdersData(allOrders);
 
-        const warnings: Record<number, string> = {};
+        // Check each order's phone against existing clients
+        const matches: Record<number, MatchedClient | null> = {};
+        const defaults: Record<number, boolean> = {};
         for (let i = 0; i < allOrders.length; i++) {
-          const o = allOrders[i];
-          if (o.client.first_name) {
-            const search = `${o.client.first_name} ${o.client.last_name}`.trim();
-            const r = await fetch(`/api/orders?search=${encodeURIComponent(search)}&limit=5`);
-            const recent = await r.json();
-            const match = recent.find((x: { client_name?: string }) =>
-              x.client_name?.toLowerCase().includes(o.client.first_name.toLowerCase())
-            );
-            if (match) warnings[i] = `Possible duplicate: ${match.client_name} (#${match.order_number})`;
+          const phone = allOrders[i].client.phone;
+          if (phone) {
+            const norm = normalizePhone(phone);
+            if (norm.length >= 7) {
+              const r = await fetch(`/api/clients?search=${encodeURIComponent(norm)}`);
+              const clients = await r.json();
+              const match = Array.isArray(clients)
+                ? clients.find((c: MatchedClient & { phone: string }) =>
+                    c.phone && normalizePhone(c.phone) === norm
+                  )
+                : null;
+              if (match) {
+                matches[i] = match;
+                defaults[i] = true; // default: use existing
+              }
+            }
           }
         }
-        setDuplicateWarnings(warnings);
+        setClientMatches(matches);
+        setUseExisting(defaults);
 
       } else {
         const allItems: ParsedInvoiceItem[] = [];
@@ -133,8 +159,17 @@ export default function ImportPage() {
 
   function removeOrder(idx: number) {
     setOrdersData(prev => prev.filter((_, i) => i !== idx));
-    setDuplicateWarnings(prev => {
-      const next: Record<number, string> = {};
+    setClientMatches(prev => {
+      const next: Record<number, MatchedClient | null> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = parseInt(k);
+        if (ki < idx) next[ki] = v;
+        else if (ki > idx) next[ki - 1] = v;
+      });
+      return next;
+    });
+    setUseExisting(prev => {
+      const next: Record<number, boolean> = {};
       Object.entries(prev).forEach(([k, v]) => {
         const ki = parseInt(k);
         if (ki < idx) next[ki] = v;
@@ -159,7 +194,10 @@ export default function ImportPage() {
         const orderData = ordersData[oi];
         try {
           let clientId: number | null = null;
-          if (orderData.client.first_name) {
+
+          if (useExisting[oi] && clientMatches[oi]) {
+            clientId = clientMatches[oi]!.id;
+          } else if (orderData.client.first_name) {
             const cRes = await fetch("/api/clients", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -320,7 +358,8 @@ export default function ImportPage() {
     setPreviews([]);
     setOrdersData([]);
     setInvoiceData(null);
-    setDuplicateWarnings({});
+    setClientMatches({});
+    setUseExisting({});
     setStep("upload");
   }
 
@@ -499,53 +538,107 @@ export default function ImportPage() {
                 )}
               </div>
 
-              {duplicateWarnings[idx] && (
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-[#D4A853]/10 border border-[#D4A853]/30 text-sm">
-                  <AlertCircle className="h-4 w-4 text-[#D4A853] mt-0.5 shrink-0" />
-                  <p className="flex-1 text-[#2D3B35]">{duplicateWarnings[idx]}</p>
-                  <button
-                    onClick={() => setDuplicateWarnings(prev => { const n = { ...prev }; delete n[idx]; return n; })}
-                    className="text-[#8A9A8E] hover:text-[#D97B6C]"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-
               {!order.client.first_name && (
                 <div className="flex items-start gap-3 p-3 rounded-xl bg-[#5A8A6E]/8 border border-[#5A8A6E]/20 text-sm">
                   <AlertCircle className="h-4 w-4 text-[#5A8A6E] mt-0.5 shrink-0" />
-                  <p className="text-[#5A8A6E]">No client name found in the message — enter it below.</p>
+                  <p className="text-[#5A8A6E]">No client name found — enter it below.</p>
                 </div>
               )}
 
-              {/* Client */}
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Client</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">First name</Label>
-                    <Input
-                      value={order.client.first_name}
-                      onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, first_name: e.target.value } }))}
-                    />
+              {/* Client match banner */}
+              {clientMatches[idx] && (
+                <div className="rounded-xl border border-[#5A8A6E]/30 bg-[#5A8A6E]/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-[#5A8A6E]/15 shrink-0">
+                      <UserCheck className="h-4 w-4 text-[#5A8A6E]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#2D3B35]">
+                        Existing client matched by phone
+                      </p>
+                      <p className="text-sm text-[#2D3B35] mt-0.5">
+                        {clientMatches[idx]!.first_name} {clientMatches[idx]!.last_name}
+                        <span className="text-[#8A9A8E] font-normal ml-2">
+                          · {Number(clientMatches[idx]!.total_orders)} order{Number(clientMatches[idx]!.total_orders) !== 1 ? "s" : ""}
+                          · {formatCurrency(Number(clientMatches[idx]!.total_spent))} spent
+                        </span>
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => setUseExisting(u => ({ ...u, [idx]: true }))}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            useExisting[idx]
+                              ? "bg-[#5A8A6E] text-white"
+                              : "bg-[#E8EDE9] text-[#8A9A8E] hover:bg-[#D0DAD4]"
+                          }`}
+                        >
+                          Use {clientMatches[idx]!.first_name}
+                        </button>
+                        <button
+                          onClick={() => setUseExisting(u => ({ ...u, [idx]: false }))}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                            !useExisting[idx]
+                              ? "bg-[#2D3B35] text-white"
+                              : "bg-[#E8EDE9] text-[#8A9A8E] hover:bg-[#D0DAD4]"
+                          }`}
+                        >
+                          Create new client
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Last name</Label>
-                    <Input
-                      value={order.client.last_name}
-                      onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, last_name: e.target.value } }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Phone</Label>
-                    <Input
-                      value={order.client.phone || ""}
-                      onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, phone: e.target.value || null } }))}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              )}
+
+              {/* Client fields — hidden when using existing */}
+              {!useExisting[idx] && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Client</CardTitle></CardHeader>
+                  <CardContent className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">First name</Label>
+                      <Input
+                        value={order.client.first_name}
+                        onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, first_name: e.target.value } }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Last name</Label>
+                      <Input
+                        value={order.client.last_name}
+                        onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, last_name: e.target.value } }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Phone</Label>
+                      <Input
+                        value={order.client.phone || ""}
+                        onChange={(e) => updateOrder(idx, o => ({ ...o, client: { ...o.client, phone: e.target.value || null } }))}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* When using existing, just show phone for reference */}
+              {useExisting[idx] && clientMatches[idx] && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Client</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3 py-1">
+                      <div className="w-8 h-8 rounded-full bg-[#5A8A6E]/10 flex items-center justify-center text-xs font-semibold text-[#5A8A6E]">
+                        {clientMatches[idx]!.first_name[0]}{clientMatches[idx]!.last_name?.[0] ?? ""}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-[#2D3B35]">
+                          {clientMatches[idx]!.first_name} {clientMatches[idx]!.last_name}
+                        </p>
+                        <p className="text-xs text-[#8A9A8E]">{clientMatches[idx]!.phone}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Items */}
               <Card>
