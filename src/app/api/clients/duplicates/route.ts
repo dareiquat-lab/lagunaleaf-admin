@@ -21,9 +21,22 @@ export async function GET() {
       GROUP BY phone_norm
       HAVING COUNT(*) > 1
     )
-    SELECT n.id, n.first_name, n.last_name, n.email, n.phone, n.phone_norm, n.created_at,
+    SELECT
+      n.id, n.first_name, n.last_name, n.email, n.phone, n.phone_norm, n.created_at,
       COUNT(o.id) AS total_orders,
-      COALESCE(SUM(o.total), 0) AS total_spent
+      COALESCE(SUM(o.total), 0) AS total_spent,
+      COALESCE(
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id',           o.id,
+            'order_number', o.order_number,
+            'total',        o.total,
+            'ordered_at',   o.ordered_at,
+            'status',       o.status
+          ) ORDER BY o.ordered_at DESC
+        ) FILTER (WHERE o.id IS NOT NULL),
+        '[]'::json
+      ) AS orders
     FROM normalized n
     JOIN dup_norms d ON d.phone_norm = n.phone_norm
     LEFT JOIN orders o ON o.client_id = n.id

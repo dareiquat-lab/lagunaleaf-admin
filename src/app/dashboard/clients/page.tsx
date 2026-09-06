@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Search, Edit2, Trash2, Users, ExternalLink, GitMerge, Phone, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Users, ExternalLink, GitMerge, Phone, ChevronDown, ChevronUp, ExternalLink as OrderLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,6 +13,14 @@ import { Client } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
+interface DupOrder {
+  id: number;
+  order_number: string;
+  total: number;
+  ordered_at: string;
+  status: string;
+}
+
 interface DupClient {
   id: number;
   first_name: string;
@@ -22,6 +30,7 @@ interface DupClient {
   created_at: string;
   total_orders: number;
   total_spent: number;
+  orders: DupOrder[];
 }
 
 function getDefaultKeep(group: DupClient[]): number {
@@ -31,19 +40,33 @@ function getDefaultKeep(group: DupClient[]): number {
 }
 
 function DuplicatesPanel({
-  groups,
+  groups: initialGroups,
   onMerged,
 }: {
   groups: DupClient[][];
   onMerged: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [groups, setGroups] = useState(initialGroups);
   const [keepIds, setKeepIds] = useState<Record<number, number>>(() => {
     const d: Record<number, number> = {};
-    groups.forEach((g, i) => { d[i] = getDefaultKeep(g); });
+    initialGroups.forEach((g, i) => { d[i] = getDefaultKeep(g); });
     return d;
   });
   const [merging, setMerging] = useState<number | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<number | null>(null);
+
+  // keep local groups in sync when parent refetches
+  useEffect(() => {
+    setGroups(initialGroups);
+    setKeepIds((prev) => {
+      const d: Record<number, number> = {};
+      initialGroups.forEach((g, i) => {
+        d[i] = prev[i] && g.some((c) => c.id === prev[i]) ? prev[i] : getDefaultKeep(g);
+      });
+      return d;
+    });
+  }, [initialGroups]);
 
   async function handleMerge(idx: number) {
     const group = groups[idx];
@@ -66,6 +89,36 @@ function DuplicatesPanel({
     }
   }
 
+  async function handleDeleteOrder(orderId: number, groupIdx: number, clientId: number) {
+    setDeletingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Order deleted");
+      // Optimistic update: remove order from local state
+      setGroups((prev) =>
+        prev.map((group, gi) =>
+          gi !== groupIdx
+            ? group
+            : group.map((c) =>
+                c.id !== clientId
+                  ? c
+                  : {
+                      ...c,
+                      orders: c.orders.filter((o) => o.id !== orderId),
+                      total_orders: c.total_orders - 1,
+                      total_spent: c.total_spent - (c.orders.find((o) => o.id === orderId)?.total ?? 0),
+                    }
+              )
+        )
+      );
+    } catch {
+      toast.error("Failed to delete order");
+    } finally {
+      setDeletingOrderId(null);
+    }
+  }
+
   return (
     <div className="rounded-xl border border-[#D4A853]/40 bg-[#D4A853]/8 overflow-hidden">
       <button
@@ -80,7 +133,7 @@ function DuplicatesPanel({
             <p className="text-sm font-semibold text-[#2D3B35]">
               {groups.length} duplicate {groups.length === 1 ? "group" : "groups"} found
             </p>
-            <p className="text-xs text-[#8A9A8E]">Same phone number — review and merge if they&apos;re the same person</p>
+            <p className="text-xs text-[#8A9A8E]">Same phone number — review orders, then merge if they&apos;re the same person</p>
           </div>
         </div>
         {open ? (
@@ -94,47 +147,112 @@ function DuplicatesPanel({
         <div className="border-t border-[#D4A853]/30 divide-y divide-[#D4A853]/20">
           {groups.map((group, idx) => (
             <div key={idx} className="px-5 py-4 space-y-3">
+              {/* Phone label */}
               <div className="flex items-center gap-2 text-xs text-[#8A9A8E]">
                 <Phone className="h-3.5 w-3.5" />
                 <span>{group[0].phone}</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Client cards stacked vertically */}
+              <div className="space-y-2">
                 {group.map((client) => {
                   const isKeep = keepIds[idx] === client.id;
                   return (
-                    <button
+                    <div
                       key={client.id}
-                      onClick={() => setKeepIds((k) => ({ ...k, [idx]: client.id }))}
-                      className={`text-left p-3 rounded-lg border-2 transition-all ${
-                        isKeep
-                          ? "border-[#5A8A6E] bg-[#5A8A6E]/5"
-                          : "border-[#E8EDE9] bg-white hover:border-[#5A8A6E]/40"
+                      className={`rounded-lg border-2 overflow-hidden transition-all ${
+                        isKeep ? "border-[#5A8A6E]" : "border-[#E8EDE9] bg-white"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#2D3B35] truncate">
-                            {client.first_name} {client.last_name}
-                          </p>
-                          {client.email && (
-                            <p className="text-xs text-[#8A9A8E] truncate">{client.email}</p>
-                          )}
-                          <p className="text-xs text-[#8A9A8E] mt-1">
-                            {Number(client.total_orders)} order{Number(client.total_orders) !== 1 ? "s" : ""} · {formatCurrency(Number(client.total_spent))}
-                          </p>
+                      {/* Client header — click to select as Keep */}
+                      <button
+                        onClick={() => setKeepIds((k) => ({ ...k, [idx]: client.id }))}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                          isKeep ? "bg-[#5A8A6E]/5 hover:bg-[#5A8A6E]/8" : "bg-white hover:bg-[#FAFAF8]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                            isKeep ? "bg-[#5A8A6E]/15 text-[#5A8A6E]" : "bg-[#F0F4F1] text-[#8A9A8E]"
+                          }`}>
+                            {client.first_name[0]}{client.last_name?.[0] ?? ""}
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-semibold text-[#2D3B35]">
+                              {client.first_name} {client.last_name}
+                            </p>
+                            {client.email && (
+                              <p className="text-xs text-[#8A9A8E]">{client.email}</p>
+                            )}
+                          </div>
                         </div>
-                        {isKeep && (
-                          <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#5A8A6E] text-white">
-                            Keep
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs text-[#8A9A8E]">
+                            {Number(client.total_orders)} order{Number(client.total_orders) !== 1 ? "s" : ""} · {formatCurrency(Number(client.total_spent))}
                           </span>
-                        )}
-                      </div>
-                    </button>
+                          {isKeep && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#5A8A6E] text-white">
+                              Keep
+                            </span>
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Orders list */}
+                      {client.orders.length > 0 ? (
+                        <div className="border-t border-[#E8EDE9]">
+                          <table className="w-full text-xs">
+                            <thead className="bg-[#FAFAF8]">
+                              <tr>
+                                <th className="text-left px-4 py-2 font-medium text-[#8A9A8E]">Order</th>
+                                <th className="text-left px-3 py-2 font-medium text-[#8A9A8E]">Date</th>
+                                <th className="text-right px-3 py-2 font-medium text-[#8A9A8E]">Total</th>
+                                <th className="text-right px-3 py-2 font-medium text-[#8A9A8E]">Delete</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#E8EDE9]">
+                              {client.orders.map((order) => (
+                                <tr key={order.id} className="hover:bg-[#FAFAF8] transition-colors group">
+                                  <td className="px-4 py-2">
+                                    <Link
+                                      href={`/dashboard/orders/${order.id}`}
+                                      className="flex items-center gap-1 font-medium text-[#5A8A6E] hover:underline"
+                                    >
+                                      {order.order_number}
+                                      <OrderLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </Link>
+                                  </td>
+                                  <td className="px-3 py-2 text-[#8A9A8E]">
+                                    {formatDate(order.ordered_at)}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-medium text-[#2D3B35]">
+                                    {formatCurrency(Number(order.total))}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <button
+                                      onClick={() => handleDeleteOrder(order.id, idx, client.id)}
+                                      disabled={deletingOrderId === order.id}
+                                      className="px-2 py-0.5 rounded text-[10px] font-medium text-[#D97B6C] border border-[#D97B6C]/30 hover:bg-[#D97B6C]/10 transition-colors disabled:opacity-40"
+                                    >
+                                      {deletingOrderId === order.id ? "…" : "Delete"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="border-t border-[#E8EDE9] px-4 py-2">
+                          <p className="text-xs text-[#8A9A8E] italic">No orders</p>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
 
+              {/* Merge action */}
               <div className="flex items-center gap-3">
                 <Button
                   size="sm"
@@ -145,7 +263,7 @@ function DuplicatesPanel({
                   <GitMerge className="h-3.5 w-3.5" />
                   {merging === idx
                     ? "Merging…"
-                    : `Merge into ${group.find((c) => c.id === keepIds[idx])?.first_name ?? "selected"}`}
+                    : `Merge into ${groups[idx]?.find((c) => c.id === keepIds[idx])?.first_name ?? "selected"}`}
                 </Button>
                 <p className="text-xs text-[#8A9A8E]">
                   Click a card to choose which record to keep
