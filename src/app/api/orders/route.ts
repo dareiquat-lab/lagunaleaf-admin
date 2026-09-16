@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const paymentStatus = searchParams.get("payment_status");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const limit = parseInt(searchParams.get("limit") || "100");
+  const limitParam = searchParams.get("limit");
+  const limit = limitParam ? parseInt(limitParam) : null;
 
   const sql = getDb();
 
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     AND (${to ? sql`o.ordered_at <= ${to}::timestamp` : sql`TRUE`})
     GROUP BY o.id, c.first_name, c.last_name
     ORDER BY COALESCE(c.first_name, 'zzz') ASC, COALESCE(c.last_name, '') ASC, o.ordered_at DESC
-    LIMIT ${limit}
+    ${limit !== null ? sql`LIMIT ${limit}` : sql``}
   `;
 
   return NextResponse.json(orders);
