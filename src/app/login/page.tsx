@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Leaf, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,10 @@ export default function LoginPage() {
       if (result?.error) {
         toast.error("Incorrect password");
       } else {
-        router.push("/dashboard");
+        const session = await getSession();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const role = (session?.user as any)?.role;
+        router.push(role === "staff" ? "/staff" : "/dashboard");
         router.refresh();
       }
     } catch {
@@ -56,7 +59,7 @@ export default function LoginPage() {
               <Leaf className="h-7 w-7 text-white" />
             </div>
             <h1 className="text-2xl font-semibold text-[#5A8A6E] tracking-tight">Laguna Leaf</h1>
-            <p className="text-sm text-[#8A9A8E] mt-1">Wellness Center · Admin Portal</p>
+            <p className="text-sm text-[#8A9A8E] mt-1">Wellness Center</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

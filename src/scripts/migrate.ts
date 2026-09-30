@@ -112,6 +112,19 @@ async function migrate() {
     )
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id SERIAL PRIMARY KEY,
+      actor VARCHAR(20) NOT NULL DEFAULT 'admin',
+      action VARCHAR(100) NOT NULL,
+      entity_type VARCHAR(50) NOT NULL,
+      entity_id INTEGER,
+      entity_label VARCHAR(255),
+      details JSONB,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
   console.log("Tables created successfully.");
 
   // Seed categories

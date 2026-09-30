@@ -19,11 +19,19 @@ export const authConfig: NextAuthConfig = {
       return true;
     },
     async jwt({ token, user }) {
-      if (user) token.email = user.email;
+      if (user) {
+        token.email = user.email;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (token as any).role = (user as any).role;
+      }
       return token;
     },
     async session({ session, token }) {
-      if (token) session.user.email = token.email as string;
+      if (token) {
+        session.user.email = token.email as string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).role = (token as any).role;
+      }
       return session;
     },
   },

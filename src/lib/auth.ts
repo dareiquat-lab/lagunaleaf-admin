@@ -12,7 +12,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (credentials?.password === "laguna420") {
-          return { id: "admin", email: "admin@lagunaleaf.com", name: "Admin" };
+          return { id: "admin", email: "admin@lagunaleaf.com", name: "Admin", role: "admin" };
+        }
+        if (credentials?.password === "lagunastaff") {
+          return { id: "staff", email: "staff@lagunaleaf.com", name: "Staff", role: "staff" };
         }
         return null;
       },

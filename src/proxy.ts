@@ -10,7 +10,7 @@ export function proxy(request: NextRequest) {
     request.cookies.get("next-auth.session-token")?.value ||
     request.cookies.get("__Secure-next-auth.session-token")?.value;
 
-  if (pathname.startsWith("/dashboard") && !sessionToken) {
+  if ((pathname.startsWith("/dashboard") || pathname.startsWith("/staff")) && !sessionToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

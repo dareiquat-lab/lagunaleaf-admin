@@ -8,7 +8,9 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session) redirect("/");
+  if (!session) redirect("/login");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if ((session.user as any)?.role !== "admin") redirect("/staff");
 
   return (
     <div className="min-h-screen bg-[#E3E7E4] dark:bg-[#111816]">

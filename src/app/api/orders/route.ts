@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/utils";
+import { logActivity, actorFromSession } from "@/lib/activity";
+import { resolveCustomItems } from "@/lib/orders";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -56,6 +58,43 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const sql = getDb();
 
+  // Handle inventory for bulk status changes
+  if (body.status !== undefined) {
+    const filterClause = sql`
+      WHERE (
+        ${search
+          ? sql`(order_number ILIKE ${"%" + search + "%"} OR EXISTS (
+              SELECT 1 FROM clients c
+              WHERE c.id = client_id
+              AND CONCAT(c.first_name, ' ', c.last_name) ILIKE ${"%" + search + "%"}
+            ))`
+          : sql`TRUE`}
+      )
+      AND (${statusFilter  ? sql`status         = ${statusFilter}`  : sql`TRUE`})
+      AND (${paymentFilter ? sql`payment_status = ${paymentFilter}` : sql`TRUE`})
+      AND (${from ? sql`ordered_at >= ${from}::timestamp` : sql`TRUE`})
+      AND (${to   ? sql`ordered_at <= ${to}::timestamp`   : sql`TRUE`})
+    `;
+
+    if (body.status === "completed") {
+      const toComplete = await sql`SELECT id FROM orders ${filterClause} AND status != 'completed'`;
+      for (const ord of toComplete) {
+        const items = await sql`SELECT product_id, quantity FROM order_items WHERE order_id = ${ord.id} AND product_id IS NOT NULL`;
+        for (const item of items) {
+          await sql`UPDATE products SET stock_quantity = stock_quantity - ${item.quantity}, updated_at = NOW() WHERE id = ${item.product_id}`;
+        }
+      }
+    } else {
+      const toUnComplete = await sql`SELECT id FROM orders ${filterClause} AND status = 'completed'`;
+      for (const ord of toUnComplete) {
+        const items = await sql`SELECT product_id, quantity FROM order_items WHERE order_id = ${ord.id} AND product_id IS NOT NULL`;
+        for (const item of items) {
+          await sql`UPDATE products SET stock_quantity = stock_quantity + ${item.quantity}, updated_at = NOW() WHERE id = ${item.product_id}`;
+        }
+      }
+    }
+  }
+
   const updated = await sql`
     UPDATE orders SET
       status         = COALESCE(${body.status         ?? null}, status),
@@ -86,7 +125,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const sql = getDb();
-
+  const actor = actorFromSession(session);
   const orderNumber = generateOrderNumber();
 
   const [order] = await sql`
@@ -103,14 +142,39 @@ export async function POST(req: NextRequest) {
     RETURNING *
   `;
 
-  if (body.items && body.items.length > 0) {
-    for (const item of body.items) {
-      await sql`
-        INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_cost, unit_price, subtotal)
-        VALUES (${order.id}, ${item.product_id || null}, ${item.product_name}, ${item.quantity}, ${item.unit_cost}, ${item.unit_price}, ${item.subtotal})
-      `;
+  // Resolve custom items (auto-create products for any item without a product_id)
+  const resolvedItems = body.items?.length > 0
+    ? await resolveCustomItems(body.items, actor, orderNumber)
+    : [];
+
+  for (const item of resolvedItems) {
+    await sql`
+      INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_cost, unit_price, subtotal)
+      VALUES (${order.id}, ${item.product_id || null}, ${item.product_name}, ${item.quantity}, ${item.unit_cost}, ${item.unit_price}, ${item.subtotal})
+    `;
+  }
+
+  // Deduct inventory when order is created as completed
+  if (body.status === "completed") {
+    for (const item of resolvedItems) {
+      if (item.product_id) {
+        await sql`UPDATE products SET stock_quantity = stock_quantity - ${item.quantity}, updated_at = NOW() WHERE id = ${item.product_id}`;
+      }
     }
   }
+
+  await logActivity({
+    actor,
+    action: "order_created",
+    entityType: "order",
+    entityId: order.id,
+    entityLabel: orderNumber,
+    details: {
+      total: order.total,
+      status: order.status,
+      items_count: resolvedItems.length,
+    },
+  });
 
   return NextResponse.json(order, { status: 201 });
 }

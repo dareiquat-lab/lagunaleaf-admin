@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { generateSKU } from "@/lib/utils";
+import { logActivity, actorFromSession } from "@/lib/activity";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const sql = getDb();
+  const actor = actorFromSession(session);
 
   const sku = body.sku || generateSKU();
 
@@ -61,6 +63,15 @@ export async function POST(req: NextRequest) {
     )
     RETURNING *
   `;
+
+  await logActivity({
+    actor,
+    action: "product_created",
+    entityType: "product",
+    entityId: product.id,
+    entityLabel: product.name,
+    details: { sale_price: product.sale_price, stock_quantity: product.stock_quantity },
+  });
 
   return NextResponse.json(product, { status: 201 });
 }

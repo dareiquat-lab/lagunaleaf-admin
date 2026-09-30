@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { logActivity, actorFromSession } from "@/lib/activity";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -28,6 +29,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const body = await req.json();
   const sql = getDb();
+  const actor = actorFromSession(session);
+
+  const [before] = await sql`SELECT name, stock_quantity FROM products WHERE id = ${parseInt(id)}`;
 
   const [product] = await sql`
     UPDATE products SET
@@ -49,6 +53,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   if (!product) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const details: Record<string, unknown> = {};
+  if (before?.stock_quantity !== product.stock_quantity) {
+    details.stock_before = before?.stock_quantity;
+    details.stock_after = product.stock_quantity;
+  }
+
+  await logActivity({
+    actor,
+    action: "product_updated",
+    entityType: "product",
+    entityId: product.id,
+    entityLabel: product.name,
+    details: Object.keys(details).length ? details : null,
+  });
+
   return NextResponse.json(product);
 }
 
@@ -58,8 +77,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params;
   const sql = getDb();
+  const actor = actorFromSession(session);
 
+  const [product] = await sql`SELECT name FROM products WHERE id = ${parseInt(id)}`;
   await sql`DELETE FROM products WHERE id = ${parseInt(id)}`;
+
+  await logActivity({
+    actor,
+    action: "product_deleted",
+    entityType: "product",
+    entityId: parseInt(id),
+    entityLabel: product?.name ?? `Product #${id}`,
+    details: null,
+  });
 
   return NextResponse.json({ success: true });
 }
