@@ -10,13 +10,14 @@ export function proxy(request: NextRequest) {
     request.cookies.get("next-auth.session-token")?.value ||
     request.cookies.get("__Secure-next-auth.session-token")?.value;
 
+  // Protect both portals — redirect to login if no session cookie
   if ((pathname.startsWith("/dashboard") || pathname.startsWith("/staff")) && !sessionToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if ((pathname === "/" || pathname === "/login") && sessionToken) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+  // Do NOT redirect from /login based on a raw cookie check — the cookie may
+  // be stale/invalid, which caused an infinite redirect loop on Safari.
+  // The login page handles post-login redirect client-side via getSession().
 
   return NextResponse.next();
 }
