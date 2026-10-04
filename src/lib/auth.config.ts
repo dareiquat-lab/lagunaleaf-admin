@@ -9,13 +9,18 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const role = (auth?.user as any)?.role as string | undefined;
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
+      const isOnStaff = nextUrl.pathname.startsWith("/staff");
       const isOnLogin =
         nextUrl.pathname === "/" || nextUrl.pathname === "/login";
 
-      if (isOnDashboard && !isLoggedIn) return false;
-      if (isOnLogin && isLoggedIn)
-        return Response.redirect(new URL("/dashboard", nextUrl));
+      if ((isOnDashboard || isOnStaff) && !isLoggedIn) return false;
+      if (isOnLogin && isLoggedIn) {
+        const target = role === "staff" ? "/staff" : "/dashboard";
+        return Response.redirect(new URL(target, nextUrl));
+      }
       return true;
     },
     async jwt({ token, user }) {

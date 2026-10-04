@@ -118,10 +118,10 @@ export default function StaffOrderDetailPage() {
   if (!order) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/staff">
+          <Link href="/staff/orders">
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <ArrowLeft className="h-4 w-4" />
             </Button>

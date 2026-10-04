@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { StaffNav } from "@/components/staff-nav";
+import { StaffSidebar } from "@/components/staff-sidebar";
 
 export default async function StaffLayout({
   children,
@@ -10,12 +10,15 @@ export default async function StaffLayout({
   const session = await auth();
   if (!session) redirect("/login");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((session.user as any)?.role !== "staff") redirect("/dashboard");
+  const role = (session.user as any)?.role;
+  if (role === "admin") redirect("/dashboard");
+  if (role !== "staff") redirect("/login");
 
   return (
     <div className="min-h-screen bg-[#E3E7E4]">
-      <StaffNav />
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <StaffSidebar />
+      <main className="lg:ml-60 pt-0 lg:pt-0">
+        <div className="h-14 lg:hidden" />
         {children}
       </main>
     </div>

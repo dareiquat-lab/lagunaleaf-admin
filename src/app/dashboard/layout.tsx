@@ -10,7 +10,9 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session) redirect("/login");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((session.user as any)?.role !== "admin") redirect("/staff");
+  const role = (session.user as any)?.role;
+  if (role === "staff") redirect("/staff");
+  if (role !== "admin") redirect("/login");
 
   return (
     <div className="min-h-screen bg-[#E3E7E4] dark:bg-[#111816]">
