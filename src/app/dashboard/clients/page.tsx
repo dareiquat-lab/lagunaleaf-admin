@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Search, Edit2, Trash2, Users, ExternalLink, GitMerge, Phone, ChevronDown, ChevronUp, ExternalLink as OrderLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientForm } from "@/components/client-form";
@@ -281,6 +282,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -292,10 +294,11 @@ export default function ClientsPage() {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set("search", search);
+    if (sort !== "newest") params.set("sort", sort);
     const res = await fetch(`/api/clients?${params}`);
     setClients(await res.json());
     setLoading(false);
-  }, [search]);
+  }, [search, sort]);
 
   const fetchDuplicates = useCallback(async () => {
     setDupLoading(true);
@@ -344,15 +347,30 @@ export default function ClientsPage() {
         <DuplicatesPanel groups={dupGroups} onMerged={handleMerged} />
       )}
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8A9A8E]" />
-        <Input
-          className="pl-9"
-          placeholder="Search clients..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + Sort */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-52">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8A9A8E]" />
+          <Input
+            className="pl-9"
+            placeholder="Search clients..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+            <SelectItem value="name_az">Name A→Z</SelectItem>
+            <SelectItem value="name_za">Name Z→A</SelectItem>
+            <SelectItem value="most_orders">Most Orders</SelectItem>
+            <SelectItem value="most_spent">Highest Spent</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}

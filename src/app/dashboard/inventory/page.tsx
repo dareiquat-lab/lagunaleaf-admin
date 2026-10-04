@@ -26,6 +26,7 @@ function InventoryContent() {
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category_id") || "all");
   const [stockFilter, setStockFilter] = useState(searchParams.get("stock_status") || "all");
+  const [sort, setSort] = useState(searchParams.get("sort") || "newest");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -37,9 +38,10 @@ function InventoryContent() {
     if (search) params.set("search", search);
     if (categoryFilter !== "all") params.set("category_id", categoryFilter);
     if (stockFilter !== "all") params.set("stock_status", stockFilter);
+    if (sort !== "newest") params.set("sort", sort);
     const qs = params.toString();
     router.replace(`/dashboard/inventory${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [search, categoryFilter, stockFilter, router]);
+  }, [search, categoryFilter, stockFilter, sort, router]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -47,10 +49,11 @@ function InventoryContent() {
     if (search) params.set("search", search);
     if (categoryFilter !== "all") params.set("category_id", categoryFilter);
     if (stockFilter !== "all") params.set("stock_status", stockFilter);
+    if (sort !== "newest") params.set("sort", sort);
     const res = await fetch(`/api/products?${params}`);
     setProducts(await res.json());
     setLoading(false);
-  }, [search, categoryFilter, stockFilter]);
+  }, [search, categoryFilter, stockFilter, sort]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -62,9 +65,10 @@ function InventoryContent() {
     setSearch("");
     setCategoryFilter("all");
     setStockFilter("all");
+    setSort("newest");
   }
 
-  const hasFilters = search || categoryFilter !== "all" || stockFilter !== "all";
+  const hasFilters = search || categoryFilter !== "all" || stockFilter !== "all" || sort !== "newest";
   const activeCategoryName = categoryFilter !== "all"
     ? categories.find((c) => c.id.toString() === categoryFilter)?.name
     : null;
@@ -147,6 +151,21 @@ function InventoryContent() {
           <SelectContent>
             <SelectItem value="all">All stock</SelectItem>
             <SelectItem value="out">Out of stock</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest First</SelectItem>
+            <SelectItem value="oldest">Oldest First</SelectItem>
+            <SelectItem value="name_az">Name A→Z</SelectItem>
+            <SelectItem value="name_za">Name Z→A</SelectItem>
+            <SelectItem value="price_high">Price High→Low</SelectItem>
+            <SelectItem value="price_low">Price Low→High</SelectItem>
+            <SelectItem value="stock_low">Stock Low→High</SelectItem>
+            <SelectItem value="stock_high">Stock High→Low</SelectItem>
           </SelectContent>
         </Select>
         {hasFilters && (

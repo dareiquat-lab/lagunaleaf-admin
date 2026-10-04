@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Search, ShoppingBag, ChevronDown, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Order } from "@/lib/types";
@@ -58,6 +59,7 @@ export default function StaffOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sort, setSort] = useState("newest");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const fetchOrders = useCallback(async () => {
@@ -65,10 +67,11 @@ export default function StaffOrdersPage() {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (statusFilter !== "all") params.set("status", statusFilter);
+    if (sort !== "newest") params.set("sort", sort);
     const res = await fetch(`/api/orders?${params}`);
     setOrders(await res.json());
     setLoading(false);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sort]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -121,7 +124,7 @@ export default function StaffOrdersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {STATUS_PILLS.map((pill) => (
             <button
               key={pill.value}
@@ -136,6 +139,19 @@ export default function StaffOrdersPage() {
               {pill.label}
             </button>
           ))}
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-40 h-7 text-xs ml-auto">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Most Recent</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="client_az">Client A→Z</SelectItem>
+              <SelectItem value="client_za">Client Z→A</SelectItem>
+              <SelectItem value="total_high">Total High→Low</SelectItem>
+              <SelectItem value="total_low">Total Low→High</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

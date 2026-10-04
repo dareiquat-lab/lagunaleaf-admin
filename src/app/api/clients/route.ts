@@ -8,35 +8,30 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
+  const sort = searchParams.get("sort") || "newest";
 
   const sql = getDb();
 
-  let clients;
-  if (search) {
-    clients = await sql`
-      SELECT c.*,
-        COUNT(o.id) as total_orders,
-        COALESCE(SUM(o.total), 0) as total_spent
-      FROM clients c
-      LEFT JOIN orders o ON o.client_id = c.id
-      WHERE c.first_name ILIKE ${"%" + search + "%"}
-        OR c.last_name ILIKE ${"%" + search + "%"}
-        OR c.email ILIKE ${"%" + search + "%"}
-        OR c.phone ILIKE ${"%" + search + "%"}
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `;
-  } else {
-    clients = await sql`
-      SELECT c.*,
-        COUNT(o.id) as total_orders,
-        COALESCE(SUM(o.total), 0) as total_spent
-      FROM clients c
-      LEFT JOIN orders o ON o.client_id = c.id
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `;
-  }
+  const orderByClause =
+    sort === "oldest"      ? sql`ORDER BY c.created_at ASC` :
+    sort === "name_az"     ? sql`ORDER BY c.first_name ASC, c.last_name ASC` :
+    sort === "name_za"     ? sql`ORDER BY c.first_name DESC, c.last_name DESC` :
+    sort === "most_orders" ? sql`ORDER BY total_orders DESC` :
+    sort === "most_spent"  ? sql`ORDER BY total_spent DESC` :
+                             sql`ORDER BY c.created_at DESC`;
+
+  const clients = await sql`
+    SELECT c.*,
+      COUNT(o.id) as total_orders,
+      COALESCE(SUM(o.total), 0) as total_spent
+    FROM clients c
+    LEFT JOIN orders o ON o.client_id = c.id
+    WHERE (
+      ${search ? sql`(c.first_name ILIKE ${"%" + search + "%"} OR c.last_name ILIKE ${"%" + search + "%"} OR c.email ILIKE ${"%" + search + "%"} OR c.phone ILIKE ${"%" + search + "%"})` : sql`TRUE`}
+    )
+    GROUP BY c.id
+    ${orderByClause}
+  `;
 
   return NextResponse.json(clients);
 }

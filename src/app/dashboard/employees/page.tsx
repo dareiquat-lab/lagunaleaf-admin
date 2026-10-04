@@ -46,6 +46,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
+  const [sort, setSort] = useState("name_az");
 
   // Add / edit employee dialog
   const [empDialog, setEmpDialog] = useState(false);
@@ -176,7 +177,11 @@ export default function EmployeesPage() {
     fetchEmployees();
   }
 
-  const visible = showInactive ? employees : employees.filter((e) => e.is_active);
+  const visible = (showInactive ? employees : employees.filter((e) => e.is_active)).slice().sort((a, b) => {
+    if (sort === "name_za") return b.name.localeCompare(a.name);
+    if (sort === "total_paid") return Number(b.total_paid ?? 0) - Number(a.total_paid ?? 0);
+    return a.name.localeCompare(b.name); // name_az default
+  });
   const totalMonthlyEstimate = visible.filter((e) => e.is_active).reduce((s, e) => s + estimatedMonthly(e), 0);
   const totalPaid = visible.filter((e) => e.is_active).reduce((s, e) => s + Number(e.total_paid ?? 0), 0);
 
@@ -212,10 +217,22 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Show inactive toggle */}
-      <div className="flex items-center gap-2">
-        <Switch checked={showInactive} onCheckedChange={setShowInactive} />
-        <span className="text-sm text-[#8A9A8E]">Show inactive employees</span>
+      {/* Show inactive toggle + sort */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Switch checked={showInactive} onCheckedChange={setShowInactive} />
+          <span className="text-sm text-[#8A9A8E]">Show inactive employees</span>
+        </div>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name_az">Name A→Z</SelectItem>
+            <SelectItem value="name_za">Name Z→A</SelectItem>
+            <SelectItem value="total_paid">Most Paid</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Employee list */}

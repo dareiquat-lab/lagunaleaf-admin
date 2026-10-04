@@ -78,6 +78,7 @@ export default function OrdersPage() {
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sort, setSort] = useState("newest");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [confirmMarkAll, setConfirmMarkAll] = useState(false);
@@ -90,10 +91,11 @@ export default function OrdersPage() {
     if (paymentFilter !== "all") params.set("payment_status", paymentFilter);
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo + "T23:59:59");
+    if (sort !== "newest") params.set("sort", sort);
     const res = await fetch(`/api/orders?${params}`);
     setOrders(await res.json());
     setLoading(false);
-  }, [search, statusFilter, paymentFilter, dateFrom, dateTo]);
+  }, [search, statusFilter, paymentFilter, dateFrom, dateTo, sort]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -103,9 +105,10 @@ export default function OrdersPage() {
     setPaymentFilter("all");
     setDateFrom("");
     setDateTo("");
+    setSort("newest");
   }
 
-  const hasFilters = search || statusFilter !== "all" || paymentFilter !== "all" || dateFrom || dateTo;
+  const hasFilters = search || statusFilter !== "all" || paymentFilter !== "all" || dateFrom || dateTo || sort !== "newest";
 
   async function patchOrder(id: number, patch: Record<string, string>) {
     // Optimistic update
@@ -212,6 +215,19 @@ export default function OrdersPage() {
               <SelectItem value="unpaid">Unpaid</SelectItem>
               <SelectItem value="partial">Partial</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Most Recent</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="client_az">Client A→Z</SelectItem>
+              <SelectItem value="client_za">Client Z→A</SelectItem>
+              <SelectItem value="total_high">Total High→Low</SelectItem>
+              <SelectItem value="total_low">Total Low→High</SelectItem>
             </SelectContent>
           </Select>
         </div>

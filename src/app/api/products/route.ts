@@ -12,30 +12,31 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") || "";
   const categoryId = searchParams.get("category_id");
   const stockStatus = searchParams.get("stock_status");
+  const sort = searchParams.get("sort") || "newest";
 
   const sql = getDb();
 
-  let products;
-  if (search || categoryId || stockStatus) {
-    products = await sql`
-      SELECT p.*, c.name as category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (
-        ${search ? sql`(p.name ILIKE ${"%" + search + "%"} OR p.sku ILIKE ${"%" + search + "%"})` : sql`TRUE`}
-      )
-      AND (${categoryId ? sql`p.category_id = ${parseInt(categoryId)}` : sql`TRUE`})
-      AND (${stockStatus === "low" || stockStatus === "out" ? sql`p.stock_quantity = 0` : sql`TRUE`})
-      ORDER BY p.created_at DESC
-    `;
-  } else {
-    products = await sql`
-      SELECT p.*, c.name as category_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-      ORDER BY p.created_at DESC
-    `;
-  }
+  const orderByClause =
+    sort === "oldest"     ? sql`ORDER BY p.created_at ASC` :
+    sort === "name_az"    ? sql`ORDER BY p.name ASC` :
+    sort === "name_za"    ? sql`ORDER BY p.name DESC` :
+    sort === "price_high" ? sql`ORDER BY p.sale_price DESC` :
+    sort === "price_low"  ? sql`ORDER BY p.sale_price ASC` :
+    sort === "stock_low"  ? sql`ORDER BY p.stock_quantity ASC` :
+    sort === "stock_high" ? sql`ORDER BY p.stock_quantity DESC` :
+                            sql`ORDER BY p.created_at DESC`;
+
+  const products = await sql`
+    SELECT p.*, c.name as category_name
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.id
+    WHERE (
+      ${search ? sql`(p.name ILIKE ${"%" + search + "%"} OR p.sku ILIKE ${"%" + search + "%"})` : sql`TRUE`}
+    )
+    AND (${categoryId ? sql`p.category_id = ${parseInt(categoryId)}` : sql`TRUE`})
+    AND (${stockStatus === "low" || stockStatus === "out" ? sql`p.stock_quantity = 0` : sql`TRUE`})
+    ${orderByClause}
+  `;
 
   return NextResponse.json(products);
 }

@@ -17,8 +17,17 @@ export async function GET(req: NextRequest) {
   const to = searchParams.get("to");
   const limitParam = searchParams.get("limit");
   const limit = limitParam ? parseInt(limitParam) : null;
+  const sort = searchParams.get("sort") || "newest";
 
   const sql = getDb();
+
+  const orderByClause =
+    sort === "oldest"     ? sql`ORDER BY o.ordered_at ASC` :
+    sort === "client_az"  ? sql`ORDER BY COALESCE(c.first_name, 'zzz') ASC, COALESCE(c.last_name, '') ASC, o.ordered_at DESC` :
+    sort === "client_za"  ? sql`ORDER BY COALESCE(c.first_name, 'zzz') DESC, COALESCE(c.last_name, '') DESC, o.ordered_at DESC` :
+    sort === "total_high" ? sql`ORDER BY o.total DESC` :
+    sort === "total_low"  ? sql`ORDER BY o.total ASC` :
+                            sql`ORDER BY o.ordered_at DESC`;
 
   const orders = await sql`
     SELECT o.*,
@@ -37,7 +46,7 @@ export async function GET(req: NextRequest) {
     AND (${from ? sql`o.ordered_at >= ${from}::timestamp` : sql`TRUE`})
     AND (${to ? sql`o.ordered_at <= ${to}::timestamp` : sql`TRUE`})
     GROUP BY o.id, c.first_name, c.last_name
-    ORDER BY COALESCE(c.first_name, 'zzz') ASC, COALESCE(c.last_name, '') ASC, o.ordered_at DESC
+    ${orderByClause}
     ${limit !== null ? sql`LIMIT ${limit}` : sql``}
   `;
 
