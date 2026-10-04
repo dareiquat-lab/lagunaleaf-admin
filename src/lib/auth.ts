@@ -11,7 +11,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (credentials?.password === "laguna420") {
+        if (credentials?.password === "Lagunaleaf$$$") {
           return { id: "admin", email: "admin@lagunaleaf.com", name: "Admin", role: "admin" };
         }
         if (credentials?.password === "lagunastaff") {
